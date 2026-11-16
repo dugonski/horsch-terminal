@@ -14,21 +14,17 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Confere a sintaxe no Windows PowerShell 5.1
-        shell: powershell
-        run: |
-          $falhou = $false
-          foreach ($arquivo in Get-ChildItem -Recurse -Filter *.ps1) {
-            $erros = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile($arquivo.FullName, [ref]$null, [ref]$erros)
-            if ($erros.Count -gt 0) { $falhou = $true; Write-Host $arquivo.FullName; $erros | Out-String | Write-Host }
-          }
-          if ($falhou) { exit 1 }
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+      - name: Confere a sintaxe no Python mais antigo suportado
+        run: python -m compileall -q macro.py macroapp macros
       - name: Monta o zip
         shell: powershell
         run: |
+          Get-ChildItem -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force
           New-Item -ItemType Directory dist | Out-Null
-          Compress-Archive -Path macro.cmd, macro.ps1, macros -DestinationPath dist/macro-app.zip
+          Compress-Archive -Path macro.cmd, macro.py, macroapp, macros -DestinationPath dist/macro-app.zip
       - uses: actions/upload-artifact@v4
         with:
           name: macro-app
