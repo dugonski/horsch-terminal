@@ -46,7 +46,7 @@ class Tela:
         modo = ctypes.c_ulong()
         if kernel32.GetConsoleMode(saida, ctypes.byref(modo)):
             kernel32.SetConsoleMode(saida, modo.value | 0x0004)  # sequências de cor e cursor
-        kernel32.SetConsoleTitleW("Macro App")
+        kernel32.SetConsoleTitleW("Horsch Terminal")
 
     @property
     def largura(self):
