@@ -8,9 +8,39 @@ import struct
 import time
 
 from . import credenciais, sap
-from .tela import BOM, DESTAQUE, FRACO, RUIM, Teclado, Tela
+from .tela import BOM, DESTAQUE, FRACO, RUIM, TITULO, VERMELHO_HORSCH, Teclado, Tela
 
 DICA = "Digite / para ver os comandos · /ajuda para ajuda"
+
+# HORSCH em letras brancas sobre vermelho, como na logo. Cada letra é desenhada
+# em pontos (# = aceso); duas linhas de pontos viram uma linha de texto.
+LETRAS = {
+    "H": ["##...##", "##...##", "##...##", "#######", "#######", "##...##", "##...##", "##...##"],
+    "O": [".#####.", "#######", "##...##", "##...##", "##...##", "##...##", "#######", ".#####."],
+    "R": ["######.", "#######", "##...##", "#######", "######.", "##..##.", "##...##", "##...##"],
+    "S": [".######", "#######", "##.....", "######.", ".######", ".....##", "#######", "######."],
+    "C": [".######", "#######", "##.....", "##.....", "##.....", "##.....", "#######", ".######"],
+}
+COR_DO_LOGO = "38;2;255;255;255;48;2;" + VERMELHO_HORSCH
+COR_DO_LOGO_BORDA = "38;2;" + VERMELHO_HORSCH
+
+
+def montar_logo(palavra="HORSCH", margem=3, vao=2, inclinacao=3):
+    pontos = []
+    for linha in range(8):
+        texto = (" " * vao).join(LETRAS[letra][linha].replace(".", " ") for letra in palavra)
+        # Cada linha de texto (duas de pontos) começa uma coluna à direita da de baixo: letras inclinadas.
+        recuo = (7 - linha) // 2 * inclinacao // 3
+        pontos.append(" " * recuo + texto + " " * (inclinacao - recuo))
+    blocos = {("#", "#"): "█", ("#", " "): "▀", (" ", "#"): "▄", (" ", " "): " "}
+    linhas = []
+    for linha in range(0, 8, 2):
+        texto = "".join(blocos[par] for par in zip(pontos[linha], pontos[linha + 1]))
+        linhas.append(" " * margem + texto + " " * margem)
+    return linhas
+
+
+LOGO = montar_logo()
 
 
 class Comando:
@@ -91,18 +121,17 @@ class App:
                 self.tela.sair()
 
     def imprimir_faixa(self):
-        nome = "* Horsch Terminal"
-        titulo = [("│ ", DESTAQUE), (nome, DESTAQUE), ("  v" + self.versao, FRACO)]
-        usado = len(nome) + 3 + len(self.versao)
+        # Topo e base de meia altura deixam a margem do retângulo fina.
+        largura = len(LOGO[0])
+        self.tela.imprimir(("▄" * largura, COR_DO_LOGO_BORDA))
+        for linha in LOGO:
+            self.tela.imprimir((linha, COR_DO_LOGO))
+        self.tela.imprimir(("▀" * largura, COR_DO_LOGO_BORDA))
+        legenda = [("Horsch Terminal", TITULO), ("  v" + self.versao, FRACO)]
         if sap.SIMULAR:
-            titulo.append(("  [simulação]", RUIM))
-            usado += 13
-        titulo.append((" " * (len(DICA) - usado) + " │", DESTAQUE))
-        barra = "─" * (len(DICA) + 2)
-        self.tela.imprimir(("┌" + barra + "┐", DESTAQUE))
-        self.tela.imprimir(*titulo)
-        self.tela.imprimir(("│ ", DESTAQUE), (DICA, FRACO), (" │", DESTAQUE))
-        self.tela.imprimir(("└" + barra + "┘", DESTAQUE))
+            legenda.append(("  [simulação]", RUIM))
+        self.tela.imprimir(*legenda)
+        self.tela.imprimir((DICA, FRACO))
         self.tela.imprimir()
 
     # ---- teclado ----
@@ -272,7 +301,7 @@ class App:
         total, feitos, falhas = len(itens), 0, []
         cancelado, erro_geral = False, None
 
-        self.tela.imprimir("  " + macro.TITULO, (" · %d %s" % (total, macro.ROTULO), FRACO))
+        self.tela.imprimir(("  " + macro.TITULO, TITULO), (" · %d %s" % (total, macro.ROTULO), FRACO))
         self.mostrar_andamento("Conectando ao SAP...")
         try:
             sessao = sap.conectar()
@@ -316,7 +345,7 @@ class App:
         linhas = []
         na_lista = self.ativa is not None
         if na_lista:
-            linhas.append(["  " + self.ativa.TITULO, (" · %d %s na lista" % (len(self.itens), self.ativa.ROTULO), FRACO)])
+            linhas.append([("  " + self.ativa.TITULO, TITULO), (" · %d %s na lista" % (len(self.itens), self.ativa.ROTULO), FRACO)])
 
         # caixa de entrada: mostra o trecho do texto em volta do cursor
         borda = DESTAQUE if na_lista else FRACO

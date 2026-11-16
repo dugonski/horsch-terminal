@@ -7,7 +7,13 @@ import os
 import shutil
 import sys
 
-DESTAQUE, FRACO, BOM, RUIM = "33", "90", "92", "91"
+# Paleta da HORSCH: vermelho, branco e cinza.
+VERMELHO_HORSCH = "195;23;39"      # o vermelho da logo, usado como fundo
+DESTAQUE = "38;2;232;52;68"        # o mesmo vermelho, mais claro para ler sobre fundo escuro
+FRACO = "38;2;140;140;140"         # cinza
+BOM = "1;38;2;255;255;255"         # branco forte
+RUIM = DESTAQUE
+TITULO = "1;38;2;255;255;255"
 
 
 def _montar(partes, limite=0):
