@@ -31,8 +31,11 @@ def _montar(partes, limite=0):
 
 
 class Tela:
+    MAXIMO_DE_LINHAS = 2000  # quanto do histórico é guardado para refazer a tela
+
     def __init__(self):
         self._linha_do_cursor = 0  # posição do cursor dentro da área viva
+        self._historico = []       # o que já foi impresso, para refazer a tela ao redimensionar
         if os.name == "nt":
             self._ligar_cores_no_windows()
         try:
@@ -64,9 +67,25 @@ class Tela:
         self._linha_do_cursor = 0
         return subir + "\r"
 
-    def imprimir(self, *partes):
-        """Escreve uma linha no histórico, acima da área viva."""
-        sys.stdout.write("\x1b[?25l" + self._voltar_ao_topo() + "\x1b[J" + _montar(partes) + "\n")
+    def imprimir(self, *partes, cortar=False):
+        """Escreve uma linha no histórico, acima da área viva. Com cortar=True a linha
+        é cortada na largura da janela em vez de continuar na linha de baixo (desenhos)."""
+        self._historico.append((partes, cortar))
+        del self._historico[:-self.MAXIMO_DE_LINHAS]
+        limite = self.largura if cortar else 0
+        sys.stdout.write("\x1b[?25l" + self._voltar_ao_topo() + "\x1b[J" + _montar(partes, limite) + "\n")
+        sys.stdout.flush()
+
+    def redimensionar(self):
+        """Refaz a tela inteira depois que a janela mudou de largura. O terminal
+        rearranja sozinho as linhas já escritas, então a posição da área viva deixa
+        de ser confiável; o jeito seguro é limpar e escrever o histórico de novo."""
+        limite = self.largura
+        saida = ["\x1b[?25l\x1b[2J\x1b[3J\x1b[H"]
+        for partes, cortar in self._historico:
+            saida.append(_montar(partes, limite if cortar else 0) + "\n")
+        self._linha_do_cursor = 0
+        sys.stdout.write("".join(saida))
         sys.stdout.flush()
 
     def desenhar(self, linhas, cursor=None):
@@ -94,6 +113,7 @@ class Tela:
     def limpar(self):
         sys.stdout.write("\x1b[2J\x1b[3J\x1b[H")
         self._linha_do_cursor = 0
+        self._historico = []
 
     def sair(self):
         """Apaga a área viva e devolve o cursor, para o app sair limpo."""

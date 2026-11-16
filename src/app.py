@@ -82,6 +82,8 @@ class App:
                     if self.sair:
                         break
                     if largura != self.tela.largura:
+                        if largura:
+                            self.tela.redimensionar()
                         largura, redesenhar = self.tela.largura, True
                     if redesenhar:
                         self.desenhar_entrada()
@@ -96,7 +98,7 @@ class App:
         # Em janela estreita demais para o desenho, fica só o texto.
         if logo.largura(self.estilo_do_logo) <= self.tela.largura:
             for linha in logo.montar(self.estilo_do_logo):
-                self.tela.imprimir(*linha)
+                self.tela.imprimir(*linha, cortar=True)
         legenda = [("Horsch Terminal", TITULO), ("  v" + self.versao, FRACO)]
         if sap.SIMULAR:
             legenda.append(("  [simulação]", RUIM))
