@@ -6,9 +6,9 @@ basta ter o Python 3.8 ou mais novo.
 
 ## Uso
 
-1. Copie a pasta inteira (`horsch-terminal.cmd`, `horsch_terminal` e `macros`) para o computador.
+1. Copie a pasta inteira (`horsch-terminal.cmd`, `main.py`, `src` e `macros`) para o computador.
 2. Abra o SAP e faça login.
-3. Dê dois cliques em `horsch-terminal.cmd`, ou rode `python -m horsch_terminal` dentro da pasta.
+3. Dê dois cliques em `horsch-terminal.cmd`, ou rode `python main.py` dentro da pasta.
 4. Digite `/` para ver os comandos.
 
 | Comando        | O que faz                                                        |
@@ -27,7 +27,7 @@ para executar. Também dá para passar direto: `/pdfs 12345 67890`.
 O SAP GUI Scripting precisa estar habilitado, como já é exigido pelas macros VBA.
 Se a conexão com o SAP falhar, rode `/diagnostico` para ver em que passo.
 
-Para testar sem SAP, rode `python -m horsch_terminal --simular` (qualquer item contendo
+Para testar sem SAP, rode `python main.py --simular` (qualquer item contendo
 "erro" falha).
 
 ## Login automático
@@ -61,11 +61,11 @@ para pastas compartilhadas nem para o repositório.
 
 ## Estrutura
 
-- `horsch_terminal/__main__.py`: ponto de entrada.
-- `horsch_terminal/sap.py`: conexão com a sessão aberta do SAP GUI e login.
-- `horsch_terminal/credenciais.py`: leitura do arquivo de credenciais.
-- `horsch_terminal/tela.py`: desenho da tela e leitura do teclado.
-- `horsch_terminal/app.py`: comandos, lista de itens e execução.
+- `main.py`: ponto de entrada.
+- `src/sap.py`: conexão com a sessão aberta do SAP GUI e login.
+- `src/credenciais.py`: leitura do arquivo de credenciais.
+- `src/tela.py`: desenho da tela e leitura do teclado.
+- `src/app.py`: comandos, lista de itens e execução.
 - `macros/`: uma macro por arquivo.
 
 ## Nova macro

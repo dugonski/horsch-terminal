@@ -18,13 +18,13 @@ jobs:
         with:
           python-version: "3.8"
       - name: Confere a sintaxe no Python mais antigo suportado
-        run: python -m compileall -q horsch_terminal macros
+        run: python -m compileall -q main.py src macros
       - name: Monta o zip
         shell: powershell
         run: |
           Get-ChildItem -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force
           New-Item -ItemType Directory dist | Out-Null
-          Compress-Archive -Path horsch-terminal.cmd, horsch_terminal, macros -DestinationPath dist/horsch-terminal.zip
+          Compress-Archive -Path horsch-terminal.cmd, main.py, src, macros -DestinationPath dist/horsch-terminal.zip
       - uses: actions/upload-artifact@v4
         with:
           name: horsch-terminal
