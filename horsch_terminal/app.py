@@ -7,7 +7,7 @@ import re
 import struct
 import time
 
-from . import sap
+from . import credenciais, sap
 from .tela import BOM, DESTAQUE, FRACO, RUIM, Teclado, Tela
 
 DICA = "Digite / para ver os comandos · /ajuda para ajuda"
@@ -39,6 +39,7 @@ class App:
         self.tela = Tela()
         self.comandos = [Comando(m.COMANDO, m.DESCRICAO, m) for m in carregar_macros(os.path.join(raiz, "macros"))]
         self.comandos += [
+            Comando("login", "Abre o SAP e faz login com as credenciais salvas"),
             Comando("ajuda", "Mostra os comandos disponíveis"),
             Comando("diagnostico", "Testa a conexão com o SAP passo a passo"),
             Comando("limpar", "Limpa a tela"),
@@ -213,6 +214,8 @@ class App:
             self.tela.imprimir()
             self.tela.imprimir(("  Dica: a lista pode ir junto do comando, ex.: /pdfs 12345 67890", FRACO))
             self.tela.imprimir()
+        elif nome == "login":
+            self.fazer_login()
         elif nome == "diagnostico":
             self.diagnosticar()
         elif nome == "limpar":
@@ -226,6 +229,27 @@ class App:
         self.mostrar_andamento("Testando a conexão com o SAP...", cancelavel=False)
         for passo, resultado, ok in sap.diagnosticar():
             self.tela.imprimir(("  √ " if ok else "  × ", BOM if ok else RUIM), passo, ("  " + resultado, FRACO))
+        self.tela.imprimir()
+
+    def fazer_login(self):
+        try:
+            dados = credenciais.ler()
+        except credenciais.ErroCredenciais as erro:
+            problema, _, como_resolver = str(erro).partition("\n")
+            self.tela.imprimir(("  × " + problema, RUIM))
+            for linha in como_resolver.splitlines():
+                self.tela.imprimir(("  " + linha, FRACO))
+            self.tela.imprimir()
+            return
+
+        def avisar(texto):
+            self.mostrar_andamento(texto, cancelavel=False)
+
+        avisar("Conectando ao SAP...")
+        try:
+            self.tela.imprimir(("  √ ", BOM), sap.fazer_login(dados, avisar))
+        except Exception as erro:
+            self.tela.imprimir(("  × %s" % erro, RUIM))
         self.tela.imprimir()
 
     # ---- execução ----

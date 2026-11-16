@@ -5,6 +5,8 @@ Fala com o SAP do mesmo jeito que o VBA: chamando métodos pelo nome (IDispatch)
 do SAP GUI, que em algumas máquinas não abre fora do VBA.
 """
 import ctypes
+import os
+import subprocess
 import sys
 import time
 from ctypes import POINTER, byref, c_long, c_uint, c_ulong, c_ushort, c_void_p, c_wchar_p
@@ -267,7 +269,10 @@ def _primeiro_filho(objeto):
 class Sessao:
     """Sessão real do SAP GUI."""
 
-    def __init__(self):
+    def __init__(self, sessao=None):
+        if sessao is not None:
+            self._sessao = sessao
+            return
         if sys.platform != "win32":
             raise ErroSap("o SAP GUI só está disponível no Windows (use --simular para testar)")
         gui = _objeto_sapgui()
@@ -294,6 +299,21 @@ class Sessao:
         if elemento is None:
             raise ErroSap('elemento "%s" não encontrado na tela do SAP' % id_)
         return elemento
+
+    def existe(self, id_):
+        """True se o elemento está na tela."""
+        try:
+            return self._sessao.chamar("findById", id_, False) is not None
+        except ErroSap:
+            return False
+
+    def ler(self, id_, propriedade="Text"):
+        """valor = session.findById(id).Text (ou outra propriedade)"""
+        return self._elemento(id_).chamar(propriedade)
+
+    def selecionar(self, id_):
+        """session.findById(id).Selected = True (opções e caixas de seleção)"""
+        self._elemento(id_).atribuir("Selected", True)
 
     def texto(self, id_, valor):
         """session.findById(id).Text = valor"""
@@ -354,6 +374,136 @@ class SessaoSimulada:
     def conferir_status(self):
         if "erro" in self._material.lower():
             raise ErroSap("Material %s não existe (simulado)" % self._material)
+
+
+# ---------------------------------------------------------------------------
+# Login: abre o SAP Logon, a conexão e entra com usuário e senha
+# ---------------------------------------------------------------------------
+
+def _caminho_do_saplogon(informado=""):
+    candidatos = [informado] if informado else []
+    try:
+        import winreg
+
+        chave = r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\saplogon.exe"
+        for vista in (winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY):
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, chave, 0, winreg.KEY_READ | vista) as aberta:
+                    candidatos.append(winreg.QueryValueEx(aberta, None)[0].strip('"'))
+            except OSError:
+                pass
+    except ImportError:
+        pass
+    for variavel in ("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"):
+        base = os.environ.get(variavel)
+        if base:
+            candidatos.append(os.path.join(base, "SAP", "FrontEnd", "SAPgui", "saplogon.exe"))
+    for caminho in candidatos:
+        if caminho and os.path.isfile(caminho):
+            return caminho
+    raise ErroSap("saplogon.exe não encontrado: informe o caminho em 'saplogon =' no arquivo de credenciais")
+
+
+def _motor_de_scripting(caminho_do_saplogon, avisar, espera=45):
+    """Devolve o motor de scripting, abrindo o SAP Logon se ele não estiver aberto."""
+    def tentar():
+        try:
+            return _objeto_sapgui().chamar("GetScriptingEngine")
+        except ErroSap:
+            return None
+
+    motor = tentar()
+    if motor is not None:
+        return motor
+    avisar("Abrindo o SAP Logon...")
+    subprocess.Popen([_caminho_do_saplogon(caminho_do_saplogon)])
+    limite = time.monotonic() + espera
+    while time.monotonic() < limite:
+        time.sleep(0.5)
+        motor = tentar()
+        if motor is not None:
+            return motor
+    raise ErroSap("o SAP Logon abriu, mas o scripting não respondeu em %d segundos" % espera)
+
+
+def _usuario_logado(sessao):
+    try:
+        return str(sessao.chamar("Info").chamar("User") or "")
+    except ErroSap:
+        return ""
+
+
+def fazer_login(credenciais, avisar=lambda texto: None):
+    """Abre o SAP e faz login. Devolve uma frase dizendo o que aconteceu.
+    A senha só é escrita no campo de senha do SAP; nunca aparece em mensagens."""
+    if SIMULAR:
+        avisar("Abrindo o SAP Logon...")
+        time.sleep(0.6)
+        return "Logado como %s (simulado)" % credenciais["usuario"]
+    if sys.platform != "win32":
+        raise ErroSap("o SAP GUI só está disponível no Windows (use --simular para testar)")
+
+    motor = _motor_de_scripting(credenciais.get("saplogon", ""), avisar)
+
+    # Reaproveita uma conexão já aberta; senão abre a que está no arquivo.
+    conexao = None
+    try:
+        if int(motor.chamar("Children").chamar("Count") or 0) > 0:
+            conexao = _primeiro_filho(motor)
+    except ErroSap:
+        conexao = None
+    if conexao is None:
+        avisar("Abrindo a conexão %s..." % credenciais["conexao"])
+        try:
+            conexao = motor.chamar("OpenConnection", credenciais["conexao"], True)
+        except ErroSap as erro:
+            raise ErroSap('não foi possível abrir a conexão "%s" do SAP Logon (%s)' % (credenciais["conexao"], erro))
+    objeto_da_sessao = None
+    limite = time.monotonic() + 30
+    while objeto_da_sessao is None and time.monotonic() < limite:
+        try:
+            objeto_da_sessao = _primeiro_filho(conexao)
+        except ErroSap:
+            objeto_da_sessao = None
+        if objeto_da_sessao is None:
+            time.sleep(0.5)
+    if objeto_da_sessao is None:
+        raise ErroSap("a conexão abriu, mas a tela de login não apareceu")
+
+    usuario = _usuario_logado(objeto_da_sessao)
+    if usuario:
+        return "O SAP já estava logado como %s" % usuario
+
+    avisar("Fazendo login...")
+    sessao = Sessao(objeto_da_sessao)
+    if not sessao.existe("wnd[0]/usr/pwdRSYST-BCODE"):
+        raise ErroSap("a tela de login do SAP não foi encontrada")
+    if credenciais.get("mandante"):
+        sessao.texto("wnd[0]/usr/txtRSYST-MANDT", credenciais["mandante"])
+    sessao.texto("wnd[0]/usr/txtRSYST-BNAME", credenciais["usuario"])
+    sessao.texto("wnd[0]/usr/pwdRSYST-BCODE", credenciais["senha"])
+    if credenciais.get("idioma"):
+        sessao.texto("wnd[0]/usr/txtRSYST-LANGU", credenciais["idioma"])
+    sessao.tecla("wnd[0]", 0)
+    sessao.conferir_status()  # usuário ou senha errados aparecem aqui
+
+    # Aviso de "usuário já logado em outro lugar": continua sem derrubar o outro login.
+    if sessao.existe("wnd[1]/usr/radMULTI_LOGON_OPT2"):
+        sessao.selecionar("wnd[1]/usr/radMULTI_LOGON_OPT2")
+        sessao.clicar("wnd[1]/tbar[0]/btn[0]")
+        sessao.conferir_status()
+
+    usuario = _usuario_logado(objeto_da_sessao)
+    if sessao.existe("wnd[1]"):
+        titulo = ""
+        try:
+            titulo = str(sessao.ler("wnd[1]") or "")
+        except ErroSap:
+            pass
+        raise ErroSap("o SAP abriu uma janela que precisa de você%s" % (": " + titulo if titulo else ""))
+    if not usuario:
+        raise ErroSap("o login não foi concluído: confira a tela do SAP")
+    return "Logado como %s" % usuario
 
 
 def conectar():
