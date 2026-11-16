@@ -7,40 +7,10 @@ import re
 import struct
 import time
 
-from . import credenciais, sap
-from .tela import BOM, DESTAQUE, FRACO, RUIM, TITULO, VERMELHO_HORSCH, Teclado, Tela
+from . import credenciais, logo, preferencias, sap
+from .tela import BOM, DESTAQUE, FRACO, RUIM, TITULO, Teclado, Tela
 
 DICA = "Digite / para ver os comandos · /ajuda para ajuda"
-
-# HORSCH em letras brancas sobre vermelho, como na logo. Cada letra é desenhada
-# em pontos (# = aceso); duas linhas de pontos viram uma linha de texto.
-LETRAS = {
-    "H": ["##...##", "##...##", "##...##", "#######", "#######", "##...##", "##...##", "##...##"],
-    "O": [".#####.", "#######", "##...##", "##...##", "##...##", "##...##", "#######", ".#####."],
-    "R": ["######.", "#######", "##...##", "#######", "######.", "##..##.", "##...##", "##...##"],
-    "S": [".######", "#######", "##.....", "######.", ".######", ".....##", "#######", "######."],
-    "C": [".######", "#######", "##.....", "##.....", "##.....", "##.....", "#######", ".######"],
-}
-COR_DO_LOGO = "38;2;255;255;255;48;2;" + VERMELHO_HORSCH
-COR_DO_LOGO_BORDA = "38;2;" + VERMELHO_HORSCH
-
-
-def montar_logo(palavra="HORSCH", margem=3, vao=2, inclinacao=3):
-    pontos = []
-    for linha in range(8):
-        texto = (" " * vao).join(LETRAS[letra][linha].replace(".", " ") for letra in palavra)
-        # Cada linha de texto (duas de pontos) começa uma coluna à direita da de baixo: letras inclinadas.
-        recuo = (7 - linha) // 2 * inclinacao // 3
-        pontos.append(" " * recuo + texto + " " * (inclinacao - recuo))
-    blocos = {("#", "#"): "█", ("#", " "): "▀", (" ", "#"): "▄", (" ", " "): " "}
-    linhas = []
-    for linha in range(0, 8, 2):
-        texto = "".join(blocos[par] for par in zip(pontos[linha], pontos[linha + 1]))
-        linhas.append(" " * margem + texto + " " * margem)
-    return linhas
-
-
-LOGO = montar_logo()
 
 
 class Comando:
@@ -70,6 +40,7 @@ class App:
         self.comandos = [Comando(m.COMANDO, m.DESCRICAO, m) for m in carregar_macros(os.path.join(raiz, "macros"))]
         self.comandos += [
             Comando("login", "Abre o SAP e faz login com as credenciais salvas"),
+            Comando("customizar", "Muda o estilo da logo: /customizar fill ou /customizar hollow"),
             Comando("ajuda", "Mostra os comandos disponíveis"),
             Comando("diagnostico", "Testa a conexão com o SAP passo a passo"),
             Comando("limpar", "Limpa a tela"),
@@ -77,6 +48,7 @@ class App:
         ]
         self.coluna = max(len(c.nome) for c in self.comandos)
 
+        self.estilo_do_logo = preferencias.ler_estilo_do_logo()
         self.sair = False
         self.texto = ""
         self.cursor = 0
@@ -121,12 +93,10 @@ class App:
                 self.tela.sair()
 
     def imprimir_faixa(self):
-        # Topo e base de meia altura deixam a margem do retângulo fina.
-        largura = len(LOGO[0])
-        self.tela.imprimir(("▄" * largura, COR_DO_LOGO_BORDA))
-        for linha in LOGO:
-            self.tela.imprimir((linha, COR_DO_LOGO))
-        self.tela.imprimir(("▀" * largura, COR_DO_LOGO_BORDA))
+        # Em janela estreita demais para o desenho, fica só o texto.
+        if logo.largura(self.estilo_do_logo) <= self.tela.largura:
+            for linha in logo.montar(self.estilo_do_logo):
+                self.tela.imprimir(*linha)
         legenda = [("Horsch Terminal", TITULO), ("  v" + self.versao, FRACO)]
         if sap.SIMULAR:
             legenda.append(("  [simulação]", RUIM))
@@ -245,6 +215,8 @@ class App:
             self.tela.imprimir()
         elif nome == "login":
             self.fazer_login()
+        elif nome == "customizar":
+            self.customizar(partes[1].strip().lower() if len(partes) > 1 else "")
         elif nome == "diagnostico":
             self.diagnosticar()
         elif nome == "limpar":
@@ -259,6 +231,22 @@ class App:
         for passo, resultado, ok in sap.diagnosticar():
             self.tela.imprimir(("  √ " if ok else "  × ", BOM if ok else RUIM), passo, ("  " + resultado, FRACO))
         self.tela.imprimir()
+
+    def customizar(self, estilo):
+        """/customizar fill ou /customizar hollow"""
+        if estilo not in logo.ESTILOS:
+            self.tela.imprimir(("  Estilo atual da logo: ", FRACO), self.estilo_do_logo)
+            self.tela.imprimir(("  /customizar fill  ", DESTAQUE), "  retângulo vermelho preenchido, letras brancas")
+            self.tela.imprimir(("  /customizar hollow", DESTAQUE), "  só o contorno das letras em vermelho")
+            self.tela.imprimir()
+            return
+        self.estilo_do_logo = estilo
+        gravou = preferencias.salvar_estilo_do_logo(estilo)
+        self.tela.limpar()
+        self.imprimir_faixa()
+        if not gravou:
+            self.tela.imprimir(("  Não foi possível salvar a preferência; ela vale só até fechar o app.", FRACO))
+            self.tela.imprimir()
 
     def fazer_login(self):
         try:
