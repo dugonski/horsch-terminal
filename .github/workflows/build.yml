@@ -10,23 +10,28 @@ permissions:
   contents: write
 
 jobs:
-  windows-exe:
-    runs-on: ubuntu-latest
+  pacote:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-python@v5
         with:
-          go-version-file: go.mod
-      - run: go vet ./...
-      - run: GOOS=windows GOARCH=amd64 go vet ./...
-      - name: Build macro.exe
-        run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o dist/macro.exe .
+          python-version: "3.8"
+      - name: Confere a sintaxe no Python mais antigo suportado
+        run: python -m compileall -q macro.py macroapp macros
+      - name: Monta o zip
+        shell: powershell
+        run: |
+          Get-ChildItem -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force
+          New-Item -ItemType Directory dist | Out-Null
+          Compress-Archive -Path macro.cmd, macro.py, macroapp, macros -DestinationPath dist/macro-app.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: macro-windows
-          path: dist/macro.exe
+          name: macro-app
+          path: dist/macro-app.zip
       - name: Publica no release
         if: startsWith(github.ref, 'refs/tags/v')
-        run: gh release create "$GITHUB_REF_NAME" dist/macro.exe --generate-notes
+        shell: bash
+        run: gh release create "$GITHUB_REF_NAME" dist/macro-app.zip --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
