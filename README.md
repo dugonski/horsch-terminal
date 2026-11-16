@@ -15,6 +15,7 @@ basta ter o Python 3.8 ou mais novo.
 |----------------|------------------------------------------------------------------|
 | `/pdfs`        | Abre no navegador o PDF de cada part number (MD04, centro 8500)  |
 | `/login`       | Abre o SAP e faz login com as credenciais salvas                 |
+| `/customizar`  | Muda o estilo da logo: `/customizar fill` ou `/customizar hollow` |
 | `/ajuda`       | Mostra os comandos                                               |
 | `/diagnostico` | Testa a conexão com o SAP passo a passo                          |
 | `/limpar`      | Limpa a tela                                                     |
@@ -59,11 +60,19 @@ a lugar nenhum além do campo de senha do SAP. A senha fica em texto puro, entã
 quem tiver acesso ao seu usuário do Windows consegue ler; não copie esse arquivo
 para pastas compartilhadas nem para o repositório.
 
+## Aparência
+
+`/customizar fill` mostra a logo como um retângulo vermelho com letras brancas;
+`/customizar hollow` mostra só o contorno das letras em vermelho. A escolha fica
+salva em `.horsch-terminal\preferencias.ini`, na sua pasta de usuário.
+
 ## Estrutura
 
 - `main.py`: ponto de entrada.
 - `src/sap.py`: conexão com a sessão aberta do SAP GUI e login.
 - `src/credenciais.py`: leitura do arquivo de credenciais.
+- `src/logo.py`: desenho da logo no banner.
+- `src/preferencias.py`: estilo da logo escolhido em `/customizar`.
 - `src/tela.py`: desenho da tela e leitura do teclado.
 - `src/app.py`: comandos, lista de itens e execução.
 - `macros/`: uma macro por arquivo.
