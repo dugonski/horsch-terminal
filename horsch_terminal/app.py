@@ -90,8 +90,9 @@ class App:
                 self.tela.sair()
 
     def imprimir_faixa(self):
-        titulo = [("│ ", DESTAQUE), ("* Macro App", DESTAQUE), ("  v" + self.versao, FRACO)]
-        usado = 14 + len(self.versao)
+        nome = "* Horsch Terminal"
+        titulo = [("│ ", DESTAQUE), (nome, DESTAQUE), ("  v" + self.versao, FRACO)]
+        usado = len(nome) + 3 + len(self.versao)
         if sap.SIMULAR:
             titulo.append(("  [simulação]", RUIM))
             usado += 13
