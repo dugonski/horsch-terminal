@@ -99,6 +99,7 @@ class App:
         if logo.largura(self.estilo_do_logo) <= self.tela.largura:
             for linha in logo.montar(self.estilo_do_logo):
                 self.tela.imprimir(*linha, cortar=True)
+            self.tela.imprimir()
         legenda = [("Horsch Terminal", TITULO), ("  v" + self.versao, FRACO)]
         if sap.SIMULAR:
             legenda.append(("  [simulação]", RUIM))
