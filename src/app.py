@@ -294,30 +294,45 @@ class App:
 
         self.tela.imprimir(("  " + macro.TITULO, TITULO), (" · %d %s" % (total, macro.ROTULO), FRACO))
         self.mostrar_andamento("Conectando ao SAP...")
+        # inicio() pode devolver outra sessão (uma janela nova) para os itens rodarem nela;
+        # fim() roda sempre que inicio() deu certo, mesmo com falha ou cancelamento.
+        sessao, preparada, aviso_do_fim = None, False, None
         try:
             sessao = sap.conectar()
             if hasattr(macro, "inicio"):
-                macro.inicio(sessao)
+                self.mostrar_andamento("Preparando o SAP...", cancelavel=False)
+                sessao = macro.inicio(sessao) or sessao
+            preparada = True
         except Exception as erro:
             erro_geral = str(erro)
 
-        if erro_geral is None:
-            for indice, item in enumerate(itens, 1):
-                try:
-                    if self.pediu_cancelamento():
+        try:
+            if preparada:
+                for indice, item in enumerate(itens, 1):
+                    try:
+                        if self.pediu_cancelamento():
+                            cancelado = True
+                            break
+                        self.mostrar_andamento("Processando %d/%d · %s" % (indice, total, item))
+                        macro.por_item(sessao, item)
+                        feitos += 1
+                        self.tela.imprimir(("  √ ", BOM), item, ("  " + getattr(macro, "SUCESSO", "ok"), FRACO))
+                    except KeyboardInterrupt:
                         cancelado = True
                         break
-                    self.mostrar_andamento("Processando %d/%d · %s" % (indice, total, item))
-                    macro.por_item(sessao, item)
-                    feitos += 1
-                    self.tela.imprimir(("  √ ", BOM), item, ("  " + getattr(macro, "SUCESSO", "ok"), FRACO))
-                except KeyboardInterrupt:
-                    cancelado = True
-                    break
+                    except Exception as erro:
+                        falhas.append(item)
+                        self.tela.imprimir(("  × ", RUIM), item, ("  %s" % erro, RUIM))
+        finally:
+            if preparada and hasattr(macro, "fim"):
+                self.mostrar_andamento("Finalizando...", cancelavel=False)
+                try:
+                    macro.fim(sessao)
                 except Exception as erro:
-                    falhas.append(item)
-                    self.tela.imprimir(("  × ", RUIM), item, ("  %s" % erro, RUIM))
+                    aviso_do_fim = str(erro)
 
+        if aviso_do_fim:
+            self.tela.imprimir(("  × Ao finalizar: " + aviso_do_fim, RUIM))
         if erro_geral is not None:
             self.tela.imprimir(("  × " + erro_geral, RUIM))
         elif cancelado:

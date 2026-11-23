@@ -262,6 +262,20 @@ def _primeiro_filho(objeto):
         return objeto.chamar("Children").chamar("ElementAt", 0)
 
 
+def _sessoes(conexao):
+    """Lista de (Id, sessão) de todas as janelas abertas na conexão."""
+    colecao = conexao.chamar("Children")
+    sessoes = []
+    for indice in range(int(colecao.chamar("Count") or 0)):
+        try:
+            sessao = colecao.chamar("ElementAt", indice)
+        except ErroSap:
+            sessao = colecao.chamar("Item", indice)
+        if sessao is not None:
+            sessoes.append((str(sessao.chamar("Id")), sessao))
+    return sessoes
+
+
 # ---------------------------------------------------------------------------
 # Sessão: as operações que as macros usam
 # ---------------------------------------------------------------------------
@@ -269,7 +283,9 @@ def _primeiro_filho(objeto):
 class Sessao:
     """Sessão real do SAP GUI."""
 
-    def __init__(self, sessao=None):
+    def __init__(self, sessao=None, conexao=None):
+        self._conexao = conexao
+        self._aberta_pelo_app = False  # só janelas abertas pelo app podem ser fechadas por ele
         if sessao is not None:
             self._sessao = sessao
             return
@@ -290,6 +306,7 @@ class Sessao:
         if sessao is None:
             raise ErroSap("SAP aberto, mas sem sessão logada")
         self._sessao = sessao
+        self._conexao = conexao
 
     def _elemento(self, id_):
         try:
@@ -342,11 +359,65 @@ class Sessao:
         except ErroSap:
             pass
 
+    def _status(self):
+        """Tipo (S, W, E, A, I) e texto da barra de status."""
+        barra = self._elemento("wnd[0]/sbar")
+        return str(barra.chamar("MessageType") or ""), str(barra.chamar("Text") or "")
+
     def conferir_status(self):
         """Lança erro com o texto da barra de status se o SAP recusou a última ação."""
-        barra = self._elemento("wnd[0]/sbar")
-        if str(barra.chamar("MessageType") or "") in ("E", "A"):
-            raise ErroSap(str(barra.chamar("Text") or "") or "o SAP recusou o item")
+        tipo, texto = self._status()
+        if tipo in ("E", "A"):
+            raise ErroSap(texto or "o SAP recusou o item")
+
+    def aguardar(self, espera=30):
+        """Espera o SAP terminar de processar a tela atual."""
+        limite = time.monotonic() + espera
+        while time.monotonic() < limite:
+            try:
+                if not self._sessao.chamar("Busy"):
+                    return
+            except ErroSap:
+                return
+            time.sleep(0.2)
+
+    def nova_janela(self, transacao, espera=20):
+        """Abre a transação numa janela nova do SAP (como digitar /o + transação)
+        e devolve a sessão dessa janela. A janela atual não é mexida."""
+        if self._conexao is None:
+            raise ErroSap("não foi possível abrir uma janela nova: conexão do SAP desconhecida")
+        antes = {id_ for id_, _ in _sessoes(self._conexao)}
+        self.texto("wnd[0]/tbar[0]/okcd", "/o" + transacao)
+        self.tecla("wnd[0]", 0)
+
+        limite = time.monotonic() + espera
+        while time.monotonic() < limite:
+            for id_, sessao in _sessoes(self._conexao):
+                if id_ not in antes:
+                    nova = Sessao(sessao, self._conexao)
+                    nova._aberta_pelo_app = True
+                    nova.aguardar()
+                    return nova
+            time.sleep(0.3)
+
+        texto = ""
+        try:
+            texto = self._status()[1]
+        except ErroSap:
+            pass
+        raise ErroSap("o SAP não abriu a janela nova (%s)" % (texto or "o limite de janelas abertas pode ter sido atingido"))
+
+    def fechar(self):
+        """Fecha a janela, se foi o app que a abriu. Nunca fecha a janela do usuário."""
+        if not self._aberta_pelo_app:
+            return
+        self._aberta_pelo_app = False
+        try:
+            self._conexao.chamar("CloseSession", str(self._sessao.chamar("Id")))
+        except ErroSap:
+            # Alternativa: /i encerra a janela atual.
+            self.texto("wnd[0]/tbar[0]/okcd", "/i")
+            self.tecla("wnd[0]", 0)
 
 
 class SessaoSimulada:
@@ -374,6 +445,13 @@ class SessaoSimulada:
     def conferir_status(self):
         if "erro" in self._material.lower():
             raise ErroSap("Material %s não existe (simulado)" % self._material)
+
+    def nova_janela(self, transacao):
+        time.sleep(0.4)
+        return SessaoSimulada()
+
+    def fechar(self):
+        time.sleep(0.2)
 
 
 # ---------------------------------------------------------------------------
@@ -475,7 +553,7 @@ def fazer_login(credenciais, avisar=lambda texto: None):
         return "O SAP já estava logado como %s" % usuario
 
     avisar("Fazendo login...")
-    sessao = Sessao(objeto_da_sessao)
+    sessao = Sessao(objeto_da_sessao, conexao)
     if not sessao.existe("wnd[0]/usr/pwdRSYST-BCODE"):
         raise ErroSap("a tela de login do SAP não foi encontrada")
     if credenciais.get("mandante"):

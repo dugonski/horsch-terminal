@@ -11,8 +11,16 @@ CAMPOS = "wnd[0]/usr/tabsTAB300/tabpF01/ssubINCLUDE300:SAPMM61R:0301/"
 
 
 def inicio(sap):
-    """Roda uma vez, antes do primeiro item."""
-    sap.maximizar("wnd[0]")
+    """Roda uma vez, antes do primeiro item. Abre a MD04 numa janela nova do SAP,
+    para não mexer na janela em que você está trabalhando. Todos os itens rodam
+    nessa janela nova."""
+    return sap.nova_janela("md04")
+
+
+def fim(sap):
+    """Roda uma vez no fim, mesmo se algum item falhar ou se a execução for
+    cancelada: fecha a janela nova."""
+    sap.fechar()
 
 
 def por_item(sap, material):

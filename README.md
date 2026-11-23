@@ -25,6 +25,10 @@ Em `/pdfs`, cole a lista de part numbers (um por linha, ou separados por espaço
 vírgula ou ponto e vírgula), tecle Enter e depois Enter de novo com a linha vazia
 para executar. Também dá para passar direto: `/pdfs 12345 67890`.
 
+O `/pdfs` abre a MD04 numa janela nova do SAP (como digitar `/omd04`) e roda
+todos os part numbers nela, sem mexer na janela em que você está trabalhando. No
+fim, mesmo se algum item falhar ou você cancelar, essa janela nova é fechada.
+
 O SAP GUI Scripting precisa estar habilitado, como já é exigido pelas macros VBA.
 Se a conexão com o SAP falhar, rode `/diagnostico` para ver em que passo.
 
@@ -93,3 +97,7 @@ comandos. Copie `macros/pdfs_md04.py`, troque o `COMANDO` e escreva os passos em
 
 `sap.conferir_status()` interrompe o item com a mensagem do SAP quando a barra de
 status mostra erro.
+
+Para a macro rodar numa janela nova do SAP, devolva `sap.nova_janela("transacao")`
+em `inicio` e feche com `sap.fechar()` em `fim`, que roda sempre no final. Veja
+`macros/pdfs_md04.py`.
