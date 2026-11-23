@@ -7,7 +7,7 @@ import re
 import struct
 import time
 
-from . import credenciais, logo, preferencias, sap
+from . import credenciais, historico, logo, preferencias, sap
 from .tela import BOM, DESTAQUE, FRACO, RUIM, TITULO, Teclado, Tela
 
 DICA = "Digite / para ver os comandos · /ajuda para ajuda"
@@ -53,6 +53,9 @@ class App:
         self.texto = ""
         self.cursor = 0
         self.escolhida = 0      # sugestão destacada
+        self.historico = historico.ler()
+        self.pos_historico = None  # posição ao navegar com as setas; None = digitando
+        self.rascunho = ""         # o que estava digitado antes de navegar
         self.ativa = None       # macro recebendo a lista
         self.itens = []
         self.ultima_tecla = 0.0
@@ -111,6 +114,7 @@ class App:
 
     def definir_texto(self, novo):
         self.texto, self.cursor, self.escolhida = novo, len(novo), 0
+        self.pos_historico = None
 
     def editar_texto(self, tecla):
         """Edição básica da linha. Devolve True se o texto mudou."""
@@ -136,6 +140,8 @@ class App:
         return False
 
     def sugestoes(self):
+        if self.pos_historico is not None:
+            return []  # navegando pelo histórico: as setas continuam no histórico
         if self.ativa or not self.texto.startswith("/") or re.search(r"\s", self.texto):
             return []
         prefixo = self.texto[1:].lower()
@@ -147,9 +153,13 @@ class App:
         if tecla == "cima":
             if escolha:
                 self.escolhida = (self.escolhida - 1) % len(sugestoes)
+            else:
+                self.historico_anterior()
         elif tecla == "baixo":
             if escolha:
                 self.escolhida = (self.escolhida + 1) % len(sugestoes)
+            else:
+                self.historico_seguinte()
         elif tecla == "tab":
             if escolha:
                 self.definir_texto("/%s " % escolha.nome)
@@ -159,9 +169,34 @@ class App:
             linha = "/" + escolha.nome if escolha else self.texto.strip()
             self.definir_texto("")
             if linha:
+                historico.adicionar(self.historico, linha)
                 self.executar_comando(linha)
         elif self.editar_texto(tecla):
             self.escolhida = 0
+            self.pos_historico = None
+
+    def historico_anterior(self):
+        if not self.historico:
+            return
+        if self.pos_historico is None:
+            self.rascunho = self.texto
+            self.pos_historico = len(self.historico)
+        if self.pos_historico > 0:
+            self.pos_historico -= 1
+        self.mostrar_no_campo(self.historico[self.pos_historico])
+
+    def historico_seguinte(self):
+        if self.pos_historico is None:
+            return
+        self.pos_historico += 1
+        if self.pos_historico >= len(self.historico):
+            self.pos_historico = None
+            self.mostrar_no_campo(self.rascunho)
+        else:
+            self.mostrar_no_campo(self.historico[self.pos_historico])
+
+    def mostrar_no_campo(self, texto):
+        self.texto, self.cursor, self.escolhida = texto, len(texto), 0
 
     def tecla_na_lista(self, tecla, desde_anterior):
         if tecla == "esc":
