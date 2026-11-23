@@ -7,7 +7,7 @@ import re
 import struct
 import time
 
-from . import credenciais, historico, logo, preferencias, sap
+from . import atualizador, credenciais, historico, logo, preferencias, sap
 from .tela import BOM, DESTAQUE, FRACO, RUIM, TITULO, Teclado, Tela
 
 DICA = "Digite / para ver os comandos · /ajuda para ajuda"
@@ -36,11 +36,13 @@ class App:
     def __init__(self, versao, raiz):
         bits = struct.calcsize("P") * 8
         self.versao = "%s (%d bits)" % (versao, bits)
+        self.versao_numero, self.raiz = versao, raiz
         self.tela = Tela()
         self.comandos = [Comando(m.COMANDO, m.DESCRICAO, m) for m in carregar_macros(os.path.join(raiz, "macros"))]
         self.comandos += [
             Comando("login", "Abre o SAP e faz login com as credenciais salvas"),
             Comando("customizar", "Muda o estilo da logo: /customizar fill ou /customizar hollow"),
+            Comando("atualizar", "Baixa e instala a versão mais nova do app"),
             Comando("ajuda", "Mostra os comandos disponíveis"),
             Comando("diagnostico", "Testa a conexão com o SAP passo a passo"),
             Comando("limpar", "Limpa a tela"),
@@ -255,6 +257,8 @@ class App:
             self.fazer_login()
         elif nome == "customizar":
             self.customizar(partes[1].strip().lower() if len(partes) > 1 else "")
+        elif nome == "atualizar":
+            self.atualizar()
         elif nome == "diagnostico":
             self.diagnosticar()
         elif nome == "limpar":
@@ -285,6 +289,28 @@ class App:
         if not gravou:
             self.tela.imprimir(("  Não foi possível salvar a preferência; ela vale só até fechar o app.", FRACO))
             self.tela.imprimir()
+
+    def atualizar(self):
+        self.mostrar_andamento("Procurando versão nova no GitHub...", cancelavel=False)
+        try:
+            publicada = atualizador.versao_publicada()
+            if not atualizador.mais_nova(publicada, self.versao_numero):
+                self.tela.imprimir(("  √ ", BOM), "Você já está na versão mais nova", ("  v" + self.versao_numero, FRACO))
+                self.tela.imprimir()
+                return
+            self.mostrar_andamento("Baixando a v%s..." % publicada, cancelavel=False)
+            trocados, lancador_mudou = atualizador.instalar(self.raiz, self.versao_numero)
+        except atualizador.ErroAtualizacao as erro:
+            self.tela.imprimir(("  × %s" % erro, RUIM))
+            self.tela.imprimir()
+            return
+        self.tela.imprimir(("  √ ", BOM), "Atualizado da v%s para a v%s" % (self.versao_numero, publicada),
+                           ("  %d arquivos" % len(trocados), FRACO))
+        self.tela.imprimir(("  Feche e abra o app de novo para usar a versão nova.", TITULO))
+        if lancador_mudou:
+            self.tela.imprimir(("  O atalho horsch-terminal.cmd também mudou e não pode ser trocado com o app aberto:", FRACO))
+            self.tela.imprimir(("  baixe o zip completo do GitHub para atualizá-lo.", FRACO))
+        self.tela.imprimir()
 
     def fazer_login(self):
         try:
