@@ -16,6 +16,7 @@ basta ter o Python 3.8 ou mais novo.
 | `/pdfs`        | Abre no navegador o PDF de cada part number (MD04, centro 8500)  |
 | `/login`       | Abre o SAP e faz login com as credenciais salvas                 |
 | `/customizar`  | Muda o estilo da logo: `/customizar fill` ou `/customizar hollow` |
+| `/atualizar`   | Baixa e instala a versão mais nova do app                        |
 | `/ajuda`       | Mostra os comandos                                               |
 | `/diagnostico` | Testa a conexão com o SAP passo a passo                          |
 | `/limpar`      | Limpa a tela                                                     |
@@ -64,6 +65,26 @@ a lugar nenhum além do campo de senha do SAP. A senha fica em texto puro, entã
 quem tiver acesso ao seu usuário do Windows consegue ler; não copie esse arquivo
 para pastas compartilhadas nem para o repositório.
 
+## Histórico de comandos
+
+Com a caixa de entrada vazia, a seta para cima traz os comandos anteriores e a
+seta para baixo volta. Enter executa de novo. O histórico fica em
+`.horsch-terminal\historico.txt`, na sua pasta de usuário, e continua lá depois
+de fechar o app.
+
+## Atualização
+
+`/atualizar` compara a sua versão com a publicada no GitHub e, se houver uma mais
+nova, baixa e troca os arquivos do app. Depois, feche e abra o app de novo.
+
+- As suas configurações e as macros que você criou em `macros` não são tocadas.
+- Antes de trocar, uma cópia de cada arquivo fica em
+  `.horsch-terminal\backup\v<versão anterior>`, na sua pasta de usuário.
+- O atalho `horsch-terminal.cmd` não é trocado com o app aberto; se ele mudar, o
+  app avisa para baixar o zip completo.
+- Precisa de acesso a `raw.githubusercontent.com` e `codeload.github.com`; se a
+  rede da empresa bloquear, o app mostra o erro e nada é alterado.
+
 ## Aparência
 
 `/customizar fill` mostra a logo como um retângulo vermelho com letras brancas;
@@ -77,6 +98,8 @@ salva em `.horsch-terminal\preferencias.ini`, na sua pasta de usuário.
 - `src/credenciais.py`: leitura do arquivo de credenciais.
 - `src/logo.py`: desenho da logo no banner.
 - `src/preferencias.py`: estilo da logo escolhido em `/customizar`.
+- `src/historico.py`: histórico de comandos.
+- `src/atualizador.py`: comando `/atualizar`.
 - `src/tela.py`: desenho da tela e leitura do teclado.
 - `src/app.py`: comandos, lista de itens e execução.
 - `macros/`: uma macro por arquivo.
