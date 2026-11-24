@@ -359,10 +359,42 @@ class Sessao:
         except ErroSap:
             pass
 
-    def _status(self):
+    def status(self):
         """Tipo (S, W, E, A, I) e texto da barra de status."""
         barra = self._elemento("wnd[0]/sbar")
         return str(barra.chamar("MessageType") or ""), str(barra.chamar("Text") or "")
+
+    _status = status
+
+    def grade(self, base="wnd[0]/usr"):
+        """A primeira lista em grade (ALV) da tela, ou None se a tela não tiver uma.
+        Procura pela tela em vez de usar um id fixo, que muda de transação para transação."""
+        try:
+            pendentes = [(self._elemento(base), 0)]
+        except ErroSap:
+            return None
+        while pendentes:
+            objeto, nivel = pendentes.pop(0)
+            try:
+                if str(objeto.chamar("Type")) == "GuiShell" and str(objeto.chamar("SubType")) == "GridView":
+                    return Grade(objeto)
+            except ErroSap:
+                pass
+            if nivel >= 8:
+                continue
+            try:
+                filhos = objeto.chamar("Children")
+                quantidade = int(filhos.chamar("Count") or 0) if filhos is not None else 0
+            except ErroSap:
+                continue
+            for indice in range(quantidade):
+                try:
+                    filho = filhos.chamar("ElementAt", indice)
+                except ErroSap:
+                    continue
+                if filho is not None:
+                    pendentes.append((filho, nivel + 1))
+        return None
 
     def conferir_status(self):
         """Lança erro com o texto da barra de status se o SAP recusou a última ação."""
@@ -420,6 +452,73 @@ class Sessao:
             self.tecla("wnd[0]", 0)
 
 
+class Grade:
+    """Uma lista ALV em formato de grade (GuiGridView), lida célula a célula."""
+
+    def __init__(self, objeto):
+        self._grade = objeto
+
+    def colunas(self):
+        """Lista de (nome técnico, título na tela) das colunas, na ordem da tela."""
+        ordem = self._grade.chamar("ColumnOrder")
+        nomes = []
+        for indice in range(int(ordem.chamar("Count") or 0)):
+            try:
+                nomes.append(str(ordem.chamar("ElementAt", indice)))
+            except ErroSap:
+                nomes.append(str(ordem.chamar("Item", indice)))
+        colunas = []
+        for nome in nomes:
+            try:
+                titulo = str(self._grade.chamar("GetDisplayedColumnTitle", nome) or "")
+            except ErroSap:
+                titulo = ""
+            colunas.append((nome, titulo))
+        return colunas
+
+    def valores(self, colunas):
+        """Uma lista de {coluna: texto} por linha. O SAP só manda para a tela as linhas
+        visíveis, então a grade é rolada em blocos enquanto é lida."""
+        total = int(self._grade.chamar("RowCount") or 0)
+        try:
+            bloco = max(1, int(self._grade.chamar("VisibleRowCount") or 0))
+        except ErroSap:
+            bloco = max(1, total)
+        linhas = []
+        for linha in range(total):
+            if linha % bloco == 0:
+                try:
+                    self._grade.atribuir("FirstVisibleRow", linha)
+                except ErroSap:
+                    pass
+            linhas.append({coluna: str(self._grade.chamar("GetCellValue", linha, coluna) or "").strip() for coluna in colunas})
+        return linhas
+
+
+class GradeSimulada:
+    """Grade de mentira da ME2M usada com --simular."""
+
+    COLUNAS = [("EBELN", "Documento compras"), ("EBELP", "Item"), ("BEDAT", "Data doc."),
+               ("WERKS", "Cen."), ("NETPR", "Preço líq."), ("WAERS", "Moeda"), ("PEINH", "Unidade preço")]
+
+    def __init__(self, material):
+        base = sum(ord(letra) for letra in material) % 90 + 5
+        por = 100 if base % 2 else 1
+        preco = base * por + 0.18
+        self._linhas = [
+            {"EBELN": "4501707798", "EBELP": "20", "BEDAT": "16.11.2026", "WERKS": "8500",
+             "NETPR": ("%.2f" % preco).replace(".", ","), "WAERS": "EUR", "PEINH": str(por)},
+            {"EBELN": "4501672232", "EBELP": "110", "BEDAT": "20.08.2026", "WERKS": "8500",
+             "NETPR": ("%.2f" % (preco * 0.8)).replace(".", ","), "WAERS": "EUR", "PEINH": str(por)},
+        ]
+
+    def colunas(self):
+        return list(self.COLUNAS)
+
+    def valores(self, colunas):
+        return [{coluna: linha.get(coluna, "") for coluna in colunas} for linha in self._linhas]
+
+
 class SessaoSimulada:
     """Sessão de mentira usada com --simular. Itens contendo "erro" falham."""
 
@@ -427,8 +526,17 @@ class SessaoSimulada:
         self._material = ""
 
     def texto(self, id_, valor):
-        if id_.endswith("MATNR"):
+        if id_.endswith("MATNR") or id_.endswith("MATNR-LOW"):
             self._material = valor
+
+    def status(self):
+        if "erro" in self._material.lower():
+            return "S", "Nenhum documento de compras selecionado para %s (simulado)" % self._material
+        return "", ""
+
+    def grade(self, base="wnd[0]/usr"):
+        time.sleep(0.2)
+        return None if "erro" in self._material.lower() else GradeSimulada(self._material)
 
     def tecla(self, janela, tecla):
         time.sleep(0.15)
