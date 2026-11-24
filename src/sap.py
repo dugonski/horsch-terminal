@@ -491,6 +491,19 @@ class Grade:
             colunas.append((nome, titulo))
         return colunas
 
+    def coluna_oculta(self, nome, amostra=30):
+        """True se a coluna existe na lista mesmo sem aparecer na tela (oculta no layout)
+        e tem algum valor nas primeiras linhas."""
+        try:
+            self._grade.atribuir("FirstVisibleRow", 0)
+            total = int(self._grade.chamar("RowCount") or 0)
+            for linha in range(min(total, amostra)):
+                if str(self._grade.chamar("GetCellValue", linha, nome) or "").strip():
+                    return True
+        except ErroSap:
+            pass
+        return False
+
     def valores(self, colunas):
         """Uma lista de {coluna: texto} por linha. O SAP só manda para a tela as linhas
         visíveis, então a grade é rolada em blocos enquanto é lida."""
@@ -531,6 +544,9 @@ class GradeSimulada:
 
     def colunas(self):
         return list(self.COLUNAS)
+
+    def coluna_oculta(self, nome, amostra=30):
+        return False
 
     def valores(self, colunas):
         return [{coluna: linha.get(coluna, "") for coluna in colunas} for linha in self._linhas]

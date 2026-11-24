@@ -57,8 +57,9 @@ def por_lote(sap, materiais):
         return {material: erro for material in materiais}
 
     colunas = _localizar_colunas(grade.colunas())
+    _completar_com_ocultas(grade, colunas)
     if "material" not in colunas:
-        raise ErroSap("a lista da ME2M não mostra a coluna Material")
+        raise ErroSap("a lista da ME2M não tem a coluna Material, nem oculta")
     por_material = {}
     for candidato, linha in _candidatos(grade, colunas):
         por_material.setdefault(_chave(linha[colunas["material"]]), []).append(candidato)
@@ -81,7 +82,9 @@ def por_item(sap, material):
         _, texto = sap.status()
         raise ErroSap(texto or "nenhum pedido de compra encontrado")
 
-    candidatos = [candidato for candidato, _ in _candidatos(grade, _localizar_colunas(grade.colunas()))]
+    colunas = _localizar_colunas(grade.colunas())
+    _completar_com_ocultas(grade, colunas, ("documento",))
+    candidatos = [candidato for candidato, _ in _candidatos(grade, colunas)]
     if not candidatos:
         raise ErroSap("nenhum pedido com preço na ME2M")
     return _mais_recente(candidatos)
@@ -142,6 +145,16 @@ class Preco:
         if self.documento:
             texto += " · pedido %s" % self.documento
         return texto + " de %s" % ".".join(reversed(self.data.split("-")))
+
+
+def _completar_com_ocultas(grade, colunas, chaves=("material", "documento")):
+    """Material e número do pedido podem estar ocultos no layout (aparecendo só nas
+    linhas de agrupamento); tenta lê-los pelo nome técnico mesmo assim."""
+    for chave in chaves:
+        if chave not in colunas:
+            nome = COLUNAS[chave][0][0]
+            if grade.coluna_oculta(nome):
+                colunas[chave] = nome
 
 
 def _localizar_colunas(disponiveis):
