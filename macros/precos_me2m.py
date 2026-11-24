@@ -22,11 +22,12 @@ SELECAO_MULTIPLA = "wnd[0]/usr/btn%_EM_MATNR_%_APP_%-VALU_PUSH"
 COLUNAS = {
     "data": (("BEDAT",), ("data doc.", "data documento", "data do documento")),
     "preco": (("NETPR",), ("preço líq.", "preço líquido", "preço liq.")),
-    "por": (("PEINH",), ("unidade preço", "unid.preço", "unidade de preço")),
+    "por": (("PEINH",), ("unidade preço", "unid.preço", "unidade de preço", "por")),
     "moeda": (("WAERS",), ("moeda",)),
     "documento": (("EBELN",), ("documento compras", "documento de compras", "doc.compra")),
     "item": (("EBELP",), ("item",)),
     "material": (("MATNR",), ("material",)),
+    "texto": (("TXZ01",), ("texto breve", "txt.breve")),
 }
 OBRIGATORIAS = ("data", "preco", "por")
 
@@ -57,7 +58,7 @@ def por_lote(sap, materiais):
         return {material: erro for material in materiais}
 
     colunas = _localizar_colunas(grade.colunas())
-    _completar_com_ocultas(grade, colunas)
+    _completar_com_ocultas(grade, colunas, ("material", "documento", "texto"))
     if "material" not in colunas:
         raise ErroSap("a lista da ME2M não tem a coluna Material, nem oculta")
     por_material = {}
@@ -83,7 +84,7 @@ def por_item(sap, material):
         raise ErroSap(texto or "nenhum pedido de compra encontrado")
 
     colunas = _localizar_colunas(grade.colunas())
-    _completar_com_ocultas(grade, colunas, ("documento",))
+    _completar_com_ocultas(grade, colunas, ("documento", "texto"))
     candidatos = [candidato for candidato, _ in _candidatos(grade, colunas)]
     if not candidatos:
         raise ErroSap("nenhum pedido com preço na ME2M")
@@ -100,12 +101,13 @@ def _candidatos(grade, colunas):
         if not data or not preco or preco <= 0:
             continue
         documento = linha.get(colunas.get("documento"), "")
-        yield (data, documento, ordem, preco, por, linha.get(colunas.get("moeda"), "")), linha
+        moeda, texto = linha.get(colunas.get("moeda"), ""), linha.get(colunas.get("texto"), "")
+        yield (data, documento, ordem, preco, por, moeda, texto), linha
 
 
 def _mais_recente(candidatos):
-    data, documento, _, preco, por, moeda = max(candidatos)
-    return Preco(preco, por, moeda, documento, data)
+    data, documento, _, preco, por, moeda, texto = max(candidatos)
+    return Preco(preco, por, moeda, documento, data, texto)
 
 
 def _chave(material):
@@ -115,21 +117,27 @@ def _chave(material):
 
 
 def concluir(linhas, resultados):
-    """Copia os preços unitários, um por linha e na ordem da lista, para colar ao
-    lado dos part numbers. Linhas sem preço ficam em branco."""
+    """Copia preço unitário e texto breve, uma linha por part number e na ordem da
+    lista, em duas colunas: colado ao lado dos part numbers, o preço fica na coluna
+    seguinte e o texto breve na outra. Linhas sem preço ficam em branco."""
     from src import area_de_transferencia
 
-    valores = [resultados[pn].unitario_texto() if resultados.get(pn) else "" for pn in linhas]
+    valores = []
+    for pn in linhas:
+        resultado = resultados.get(pn) if pn else None
+        valores.append("%s\t%s" % (resultado.unitario_texto(), resultado.texto) if resultado else "")
     if area_de_transferencia.copiar("\n".join(valores)):
-        return ["Preços copiados (%d linhas): cole na coluna ao lado dos part numbers com Ctrl+V." % len(valores),
-                "Linhas sem preço ficam em branco."]
-    # Sem área de transferência: mostra a coluna na tela, para copiar à mão.
-    return ["Não foi possível copiar automaticamente. Preços na ordem da lista:"] + [valor or "-" for valor in valores]
+        return ["Preços e textos copiados (%d linhas): cole na coluna ao lado dos part numbers com Ctrl+V." % len(valores),
+                "O preço vai na primeira coluna e o texto breve na seguinte. Linhas sem preço ficam em branco."]
+    # Sem área de transferência: mostra na tela, para copiar à mão.
+    return ["Não foi possível copiar automaticamente. Preços na ordem da lista:"] + [
+        valor.replace("\t", "  ") or "-" for valor in valores]
 
 
 class Preco:
-    def __init__(self, preco, por, moeda, documento, data):
+    def __init__(self, preco, por, moeda, documento, data, texto=""):
         self.preco, self.por, self.moeda, self.documento, self.data = preco, por, moeda, documento, data
+        self.texto = " ".join(texto.split())  # sem tabs ou quebras, para não desalinhar a colagem
 
     @property
     def unitario(self):
@@ -140,6 +148,8 @@ class Preco:
 
     def __str__(self):
         texto = "%s %s" % (self.unitario_texto(), self.moeda)
+        if self.texto:
+            texto = "%s · %s" % (self.texto, texto)
         if self.por != 1:
             texto += " · %s %s por %s" % (decimal(self.preco), self.moeda, decimal(self.por, minimo=0))
         if self.documento:
@@ -147,9 +157,9 @@ class Preco:
         return texto + " de %s" % ".".join(reversed(self.data.split("-")))
 
 
-def _completar_com_ocultas(grade, colunas, chaves=("material", "documento")):
-    """Material e número do pedido podem estar ocultos no layout (aparecendo só nas
-    linhas de agrupamento); tenta lê-los pelo nome técnico mesmo assim."""
+def _completar_com_ocultas(grade, colunas, chaves):
+    """Material, número do pedido e texto breve podem estar ocultos no layout
+    (aparecendo só nas linhas de agrupamento); tenta lê-los pelo nome técnico."""
     for chave in chaves:
         if chave not in colunas:
             nome = COLUNAS[chave][0][0]

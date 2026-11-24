@@ -526,7 +526,7 @@ class Grade:
 class GradeSimulada:
     """Grade de mentira da ME2M usada com --simular."""
 
-    COLUNAS = [("MATNR", "Material"), ("EBELN", "Documento compras"), ("EBELP", "Item"), ("BEDAT", "Data doc."),
+    COLUNAS = [("MATNR", "Material"), ("TXZ01", "Texto breve"), ("EBELN", "Documento compras"), ("EBELP", "Item"), ("BEDAT", "Data doc."),
                ("WERKS", "Cen."), ("NETPR", "Preço líq."), ("WAERS", "Moeda"), ("PEINH", "Unidade preço")]
 
     def __init__(self, materiais):
@@ -536,9 +536,9 @@ class GradeSimulada:
             por = 100 if base % 2 else 1
             preco = base * por + 0.18
             self._linhas += [
-                {"MATNR": material, "EBELN": "4501707798", "EBELP": "20", "BEDAT": "16.11.2026", "WERKS": "8500",
+                {"MATNR": material, "TXZ01": "Chicote PWR Relé %s" % material[-3:], "EBELN": "4501707798", "EBELP": "20", "BEDAT": "16.11.2026", "WERKS": "8500",
                  "NETPR": ("%.2f" % preco).replace(".", ","), "WAERS": "EUR", "PEINH": str(por)},
-                {"MATNR": material, "EBELN": "4501672232", "EBELP": "110", "BEDAT": "20.08.2026", "WERKS": "8500",
+                {"MATNR": material, "TXZ01": "Chicote PWR Relé %s" % material[-3:], "EBELN": "4501672232", "EBELP": "110", "BEDAT": "20.08.2026", "WERKS": "8500",
                  "NETPR": ("%.2f" % (preco * 0.8)).replace(".", ","), "WAERS": "EUR", "PEINH": str(por)},
             ]
 
