@@ -29,9 +29,20 @@ def git(*argumentos):
     return resultado.stdout.strip() if resultado.returncode == 0 else None
 
 
+def versao(tag):
+    return tuple(int(numero) for numero in re.findall(r"\d+", tag))
+
+
+def tag_anterior(tag):
+    """A maior versão menor que a atual entre as tags que já estão no histórico dela."""
+    tags = (git("tag", "--list", "v*", "--merged", tag) or "").split()
+    anteriores = [outra for outra in tags if versao(outra) < versao(tag)]
+    return max(anteriores, key=versao) if anteriores else None
+
+
 def main():
     tag, destino = sys.argv[1], sys.argv[2]
-    anterior = git("describe", "--tags", "--abbrev=0", "--match", "v*", "--exclude", tag, tag)
+    anterior = tag_anterior(tag)
     intervalo = "%s..%s" % (anterior, tag) if anterior else tag
     assuntos = (git("log", "--no-merges", "--reverse", "--format=%s", intervalo) or "").splitlines()
 
