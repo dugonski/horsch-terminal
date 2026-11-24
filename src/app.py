@@ -393,25 +393,52 @@ class App:
         except Exception as erro:
             erro_geral = str(erro)
 
+        def registrar(item, retorno):
+            nonlocal feitos
+            resultados[item] = retorno
+            feitos += 1
+            texto = str(retorno) if retorno is not None else getattr(macro, "SUCESSO", "ok")
+            self.tela.imprimir(("  √ ", BOM), item, ("  " + texto, FRACO))
+
+        def falhar(item, erro):
+            falhas.append(item)
+            self.tela.imprimir(("  × ", RUIM), item, ("  %s" % erro, RUIM))
+
+        # por_lote() trata todos os itens de uma vez e devolve {item: resultado ou exceção}.
+        # Se ele não conseguir, a macro segue item a item com por_item().
+        pendentes = list(itens)
+        if preparada and itens and hasattr(macro, "por_lote"):
+            self.mostrar_andamento("Consultando %d %s de uma vez..." % (total, macro.ROTULO), cancelavel=False)
+            try:
+                lote = macro.por_lote(sessao, list(itens))
+            except Exception as erro:
+                lote = None
+                self.tela.imprimir(("  Consulta única indisponível (%s); consultando um por vez." % erro, FRACO))
+            if lote is not None:
+                pendentes = []
+                for item in itens:
+                    retorno = lote.get(item)
+                    if isinstance(retorno, Exception):
+                        falhar(item, retorno)
+                    elif retorno is None:
+                        falhar(item, "sem resultado")
+                    else:
+                        registrar(item, retorno)
+
         try:
             if preparada:
-                for indice, item in enumerate(itens, 1):
+                for indice, item in enumerate(pendentes, 1):
                     try:
                         if self.pediu_cancelamento():
                             cancelado = True
                             break
-                        self.mostrar_andamento("Processando %d/%d · %s" % (indice, total, item))
-                        retorno = macro.por_item(sessao, item)
-                        resultados[item] = retorno
-                        feitos += 1
-                        texto = str(retorno) if retorno is not None else getattr(macro, "SUCESSO", "ok")
-                        self.tela.imprimir(("  √ ", BOM), item, ("  " + texto, FRACO))
+                        self.mostrar_andamento("Processando %d/%d · %s" % (indice, len(pendentes), item))
+                        registrar(item, macro.por_item(sessao, item))
                     except KeyboardInterrupt:
                         cancelado = True
                         break
                     except Exception as erro:
-                        falhas.append(item)
-                        self.tela.imprimir(("  × ", RUIM), item, ("  %s" % erro, RUIM))
+                        falhar(item, erro)
         finally:
             if preparada and hasattr(macro, "fim"):
                 self.mostrar_andamento("Finalizando...", cancelavel=False)

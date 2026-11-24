@@ -16,6 +16,7 @@ ROTULO = "part numbers"
 LINHAS = True  # uma linha colada = um item, para os preços voltarem alinhados
 
 CAMPO_MATERIAL = "wnd[0]/usr/ctxtEM_MATNR-LOW"
+SELECAO_MULTIPLA = "wnd[0]/usr/btn%_EM_MATNR_%_APP_%-VALU_PUSH"
 
 # Colunas procuradas na lista: primeiro pelo nome técnico, depois pelo título na tela.
 COLUNAS = {
@@ -25,6 +26,7 @@ COLUNAS = {
     "moeda": (("WAERS",), ("moeda",)),
     "documento": (("EBELN",), ("documento compras", "documento de compras", "doc.compra")),
     "item": (("EBELP",), ("item",)),
+    "material": (("MATNR",), ("material",)),
 }
 OBRIGATORIAS = ("data", "preco", "por")
 
@@ -39,6 +41,35 @@ def fim(sap):
     sap.fechar()
 
 
+def por_lote(sap, materiais):
+    """Uma consulta só na ME2M com todos os part numbers (seleção múltipla). Precisa
+    da coluna Material na lista para saber de quem é cada pedido; sem ela, o app
+    consulta um part number por vez com por_item()."""
+    sap.texto("wnd[0]/tbar[0]/okcd", "/nme2m")
+    sap.tecla("wnd[0]", 0)
+    sap.selecao_multipla(SELECAO_MULTIPLA, materiais)
+    sap.tecla("wnd[0]", 8)  # Executar (F8)
+
+    grade = sap.grade()
+    if grade is None:
+        _, texto = sap.status()
+        erro = ErroSap(texto or "nenhum pedido de compra encontrado")
+        return {material: erro for material in materiais}
+
+    colunas = _localizar_colunas(grade.colunas())
+    if "material" not in colunas:
+        raise ErroSap("a lista da ME2M não mostra a coluna Material")
+    por_material = {}
+    for candidato, linha in _candidatos(grade, colunas):
+        por_material.setdefault(_chave(linha[colunas["material"]]), []).append(candidato)
+
+    resultado = {}
+    for material in materiais:
+        candidatos = por_material.get(_chave(material))
+        resultado[material] = _mais_recente(candidatos) if candidatos else ErroSap("nenhum pedido com preço na ME2M")
+    return resultado
+
+
 def por_item(sap, material):
     sap.texto("wnd[0]/tbar[0]/okcd", "/nme2m")
     sap.tecla("wnd[0]", 0)
@@ -50,21 +81,34 @@ def por_item(sap, material):
         _, texto = sap.status()
         raise ErroSap(texto or "nenhum pedido de compra encontrado")
 
-    colunas = _localizar_colunas(grade.colunas())
-    candidatos = []
+    candidatos = [candidato for candidato, _ in _candidatos(grade, _localizar_colunas(grade.colunas()))]
+    if not candidatos:
+        raise ErroSap("nenhum pedido com preço na ME2M")
+    return _mais_recente(candidatos)
+
+
+def _candidatos(grade, colunas):
+    """Pedidos com data e preço, como (candidato, linha). Linhas de subtotal e itens
+    sem preço (grátis) ficam de fora."""
     for ordem, linha in enumerate(grade.valores(list(colunas.values()))):
         data = data_iso(linha[colunas["data"]])
         preco = numero(linha[colunas["preco"]])
         por = numero(linha[colunas["por"]]) or 1
         if not data or not preco or preco <= 0:
-            continue  # linhas de subtotal e itens sem preço (grátis) ficam de fora
+            continue
         documento = linha.get(colunas.get("documento"), "")
-        candidatos.append((data, documento, ordem, preco, por, linha.get(colunas.get("moeda"), "")))
-    if not candidatos:
-        raise ErroSap("nenhum pedido com preço na ME2M")
+        yield (data, documento, ordem, preco, por, linha.get(colunas.get("moeda"), "")), linha
 
-    data, documento, _, preco, por, moeda = max(candidatos)  # o mais recente
+
+def _mais_recente(candidatos):
+    data, documento, _, preco, por, moeda = max(candidatos)
     return Preco(preco, por, moeda, documento, data)
+
+
+def _chave(material):
+    """O SAP mostra materiais numéricos sem os zeros à esquerda."""
+    material = material.strip().upper()
+    return material.lstrip("0") or material if material.isdigit() else material
 
 
 def concluir(linhas, resultados):

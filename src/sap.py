@@ -366,6 +366,21 @@ class Sessao:
 
     _status = status
 
+    def selecao_multipla(self, botao, valores):
+        """Preenche a seleção múltipla de um campo (o botão de seta ao lado dele) com
+        vários valores de uma vez, pelo "Importar da área de transferência" do SAP."""
+        from . import area_de_transferencia
+
+        if not area_de_transferencia.copiar("\n".join(valores)):
+            raise ErroSap("não foi possível usar a área de transferência")
+        self.clicar(botao)
+        try:
+            self.clicar("wnd[1]/tbar[0]/btn[24]")  # Importar da área de transferência (Shift+F12)
+            self.clicar("wnd[1]/tbar[0]/btn[8]")   # Copiar (F8)
+        except ErroSap:
+            self.clicar("wnd[1]/tbar[0]/btn[12]", ignorar_erro=True)  # Cancelar: não deixa a janela aberta
+            raise
+
     def grade(self, base="wnd[0]/usr"):
         """A primeira lista em grade (ALV) da tela, ou None se a tela não tiver uma.
         Procura pela tela em vez de usar um id fixo, que muda de transação para transação."""
@@ -498,19 +513,21 @@ class Grade:
 class GradeSimulada:
     """Grade de mentira da ME2M usada com --simular."""
 
-    COLUNAS = [("EBELN", "Documento compras"), ("EBELP", "Item"), ("BEDAT", "Data doc."),
+    COLUNAS = [("MATNR", "Material"), ("EBELN", "Documento compras"), ("EBELP", "Item"), ("BEDAT", "Data doc."),
                ("WERKS", "Cen."), ("NETPR", "Preço líq."), ("WAERS", "Moeda"), ("PEINH", "Unidade preço")]
 
-    def __init__(self, material):
-        base = sum(ord(letra) for letra in material) % 90 + 5
-        por = 100 if base % 2 else 1
-        preco = base * por + 0.18
-        self._linhas = [
-            {"EBELN": "4501707798", "EBELP": "20", "BEDAT": "16.11.2026", "WERKS": "8500",
-             "NETPR": ("%.2f" % preco).replace(".", ","), "WAERS": "EUR", "PEINH": str(por)},
-            {"EBELN": "4501672232", "EBELP": "110", "BEDAT": "20.08.2026", "WERKS": "8500",
-             "NETPR": ("%.2f" % (preco * 0.8)).replace(".", ","), "WAERS": "EUR", "PEINH": str(por)},
-        ]
+    def __init__(self, materiais):
+        self._linhas = []
+        for material in materiais:
+            base = sum(ord(letra) for letra in material) % 90 + 5
+            por = 100 if base % 2 else 1
+            preco = base * por + 0.18
+            self._linhas += [
+                {"MATNR": material, "EBELN": "4501707798", "EBELP": "20", "BEDAT": "16.11.2026", "WERKS": "8500",
+                 "NETPR": ("%.2f" % preco).replace(".", ","), "WAERS": "EUR", "PEINH": str(por)},
+                {"MATNR": material, "EBELN": "4501672232", "EBELP": "110", "BEDAT": "20.08.2026", "WERKS": "8500",
+                 "NETPR": ("%.2f" % (preco * 0.8)).replace(".", ","), "WAERS": "EUR", "PEINH": str(por)},
+            ]
 
     def colunas(self):
         return list(self.COLUNAS)
@@ -524,19 +541,28 @@ class SessaoSimulada:
 
     def __init__(self):
         self._material = ""
+        self._lote = []
 
     def texto(self, id_, valor):
         if id_.endswith("MATNR") or id_.endswith("MATNR-LOW"):
-            self._material = valor
+            self._material, self._lote = valor, []
+        elif id_.endswith("okcd"):
+            self._material, self._lote = "", []
+
+    def selecao_multipla(self, botao, valores):
+        self._lote = list(valores)
 
     def status(self):
-        if "erro" in self._material.lower():
-            return "S", "Nenhum documento de compras selecionado para %s (simulado)" % self._material
+        if not self._com_pedido():
+            return "S", "Nenhum documento de compras selecionado (simulado)"
         return "", ""
 
+    def _com_pedido(self):
+        return [material for material in (self._lote or [self._material]) if "erro" not in material.lower()]
+
     def grade(self, base="wnd[0]/usr"):
-        time.sleep(0.2)
-        return None if "erro" in self._material.lower() else GradeSimulada(self._material)
+        time.sleep(0.2 + 0.05 * len(self._lote))
+        return GradeSimulada(self._com_pedido()) if self._com_pedido() else None
 
     def tecla(self, janela, tecla):
         time.sleep(0.15)
