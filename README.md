@@ -51,7 +51,8 @@ do SAP, que é fechada no fim.
 - A seleção múltipla é preenchida pela área de transferência, que depois recebe os
   preços.
 - O preço é dividido pela **unidade de preço**: 13,03 EUR por 100 vira 0,1303 EUR.
-- "Mais recente" é o pedido com a **Data doc.** mais nova.
+- "Mais recente" é o pedido com a **Data doc.** mais nova. O **texto breve** é o
+  desse mesmo pedido.
 - Itens com preço zero e linhas de subtotal são ignorados.
 
 Para usar com o Excel ou o Google Sheets:
@@ -59,9 +60,10 @@ Para usar com o Excel ou o Google Sheets:
 1. Selecione a coluna de part numbers (pode incluir a coluna de preço ao lado) e
    copie com Ctrl+C.
 2. No terminal, digite `/precos`, cole e tecle Enter duas vezes.
-3. No fim, os preços já estão copiados, um por linha e na mesma ordem da lista.
-   Clique na primeira célula da coluna de preço e cole com Ctrl+V. Linhas vazias
-   ou sem pedido ficam em branco, então o alinhamento se mantém.
+3. No fim, preço e texto breve já estão copiados, um part number por linha e na
+   mesma ordem da lista. Clique na primeira célula da coluna de preço e cole com
+   Ctrl+V: o preço fica nessa coluna e o texto breve na seguinte. Linhas vazias ou
+   sem pedido ficam em branco, então o alinhamento se mantém.
 
 Também dá para passar direto: `/precos 60103019 60217124`. Os números saem com
 vírgula decimal e sem separador de milhar, como o Excel e o Sheets em português leem.
