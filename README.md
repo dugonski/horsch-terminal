@@ -43,6 +43,13 @@ Busca na ME2M o preço do pedido de compra mais recente de cada part number, len
 a lista direto da tela do SAP (sem exportar para planilha). Roda numa janela nova
 do SAP, que é fechada no fim.
 
+- Faz **uma consulta só** com todos os part numbers (seleção múltipla da ME2M). Para
+  isso, a lista precisa mostrar a coluna **Material**. Se o seu layout não tiver
+  essa coluna, o app avisa e consulta um part number por vez, o que funciona igual,
+  só mais devagar. Para ativar a consulta única, inclua a coluna Material no layout
+  da ME2M (Alterar layout, Ctrl+F8) e salve como layout padrão.
+- A seleção múltipla é preenchida pela área de transferência, que depois recebe os
+  preços.
 - O preço é dividido pela **unidade de preço**: 13,03 EUR por 100 vira 0,1303 EUR.
 - "Mais recente" é o pedido com a **Data doc.** mais nova.
 - Itens com preço zero e linhas de subtotal são ignorados.
@@ -145,7 +152,9 @@ comandos. Copie `macros/pdfs_md04.py`, troque o `COMANDO` e escreva os passos em
 `sap.conferir_status()` interrompe o item com a mensagem do SAP quando a barra de
 status mostra erro.
 
-Em `por_item`, o que a função devolver aparece ao lado do item na tela. Com
+Em `por_item`, o que a função devolver aparece ao lado do item na tela. Uma macro
+também pode definir `por_lote(sap, itens)`, que trata todos de uma vez e devolve
+`{item: resultado}`; se ela der erro, o app usa `por_item` para cada um. Com
 `LINHAS = True`, a macro recebe a lista linha a linha (com repetidos e linhas
 vazias) e pode definir `concluir(linhas, resultados)` para fazer algo no fim, como
 copiar os resultados. Veja `macros/precos_me2m.py`. Para ler uma lista em grade
