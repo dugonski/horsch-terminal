@@ -11,11 +11,13 @@ from src.sap import ErroSap
 
 COMANDO = "precos"
 TITULO = "Preços ME2M"
-DESCRICAO = "Preço do pedido de compra mais recente de cada part number (ME2M)"
+DESCRICAO = "Preço do pedido de compra mais recente de cada part number (ME2M, centro 8500)"
 ROTULO = "part numbers"
 LINHAS = True  # uma linha colada = um item, para os preços voltarem alinhados
 
+CENTRO = "8500"
 CAMPO_MATERIAL = "wnd[0]/usr/ctxtEM_MATNR-LOW"
+CAMPO_CENTRO = "wnd[0]/usr/ctxtEM_WERKS-LOW"
 SELECAO_MULTIPLA = "wnd[0]/usr/btn%_EM_MATNR_%_APP_%-VALU_PUSH"
 
 # Colunas procuradas na lista: primeiro pelo nome técnico, depois pelo título na tela.
@@ -28,6 +30,7 @@ COLUNAS = {
     "item": (("EBELP",), ("item",)),
     "material": (("MATNR",), ("material",)),
     "texto": (("TXZ01",), ("texto breve", "txt.breve")),
+    "centro": (("WERKS",), ("cen.", "centro")),
 }
 OBRIGATORIAS = ("data", "preco", "por")
 
@@ -48,6 +51,7 @@ def por_lote(sap, materiais):
     consulta um part number por vez com por_item()."""
     sap.texto("wnd[0]/tbar[0]/okcd", "/nme2m")
     sap.tecla("wnd[0]", 0)
+    centro_na_selecao = _preencher_centro(sap)
     sap.selecao_multipla(SELECAO_MULTIPLA, materiais)
     sap.tecla("wnd[0]", 8)  # Executar (F8)
 
@@ -58,7 +62,8 @@ def por_lote(sap, materiais):
         return {material: erro for material in materiais}
 
     colunas = _localizar_colunas(grade.colunas())
-    _completar_com_ocultas(grade, colunas, ("material", "documento", "texto"))
+    _completar_com_ocultas(grade, colunas, ("material", "documento", "texto", "centro"))
+    _garantir_centro(colunas, centro_na_selecao)
     if "material" not in colunas:
         raise ErroSap("a lista da ME2M não tem a coluna Material, nem oculta")
     por_material = {}
@@ -68,13 +73,14 @@ def por_lote(sap, materiais):
     resultado = {}
     for material in materiais:
         candidatos = por_material.get(_chave(material))
-        resultado[material] = _mais_recente(candidatos) if candidatos else ErroSap("nenhum pedido com preço na ME2M")
+        resultado[material] = _mais_recente(candidatos) if candidatos else ErroSap(SEM_PEDIDO)
     return resultado
 
 
 def por_item(sap, material):
     sap.texto("wnd[0]/tbar[0]/okcd", "/nme2m")
     sap.tecla("wnd[0]", 0)
+    centro_na_selecao = _preencher_centro(sap)
     sap.texto(CAMPO_MATERIAL, material)
     sap.tecla("wnd[0]", 8)  # Executar (F8)
 
@@ -84,17 +90,40 @@ def por_item(sap, material):
         raise ErroSap(texto or "nenhum pedido de compra encontrado")
 
     colunas = _localizar_colunas(grade.colunas())
-    _completar_com_ocultas(grade, colunas, ("documento", "texto"))
+    _completar_com_ocultas(grade, colunas, ("documento", "texto", "centro"))
+    _garantir_centro(colunas, centro_na_selecao)
     candidatos = [candidato for candidato, _ in _candidatos(grade, colunas)]
     if not candidatos:
-        raise ErroSap("nenhum pedido com preço na ME2M")
+        raise ErroSap(SEM_PEDIDO)
     return _mais_recente(candidatos)
 
 
+SEM_PEDIDO = "nenhum pedido com preço no centro %s" % CENTRO
+
+
+def _preencher_centro(sap):
+    """Filtra a ME2M pelo centro já na seleção. Devolve False se o campo não existir."""
+    try:
+        sap.texto(CAMPO_CENTRO, CENTRO)
+        return True
+    except ErroSap:
+        return False
+
+
+def _garantir_centro(colunas, centro_na_selecao):
+    """Sem o filtro na seleção e sem a coluna Cen. na lista, não há como garantir o
+    centro: melhor parar do que devolver o preço de outro centro."""
+    if not centro_na_selecao and "centro" not in colunas:
+        raise ErroSap("não foi possível filtrar pelo centro %s: o campo Centro não apareceu na seleção "
+                      "da ME2M e a lista não tem a coluna Cen." % CENTRO)
+
+
 def _candidatos(grade, colunas):
-    """Pedidos com data e preço, como (candidato, linha). Linhas de subtotal e itens
-    sem preço (grátis) ficam de fora."""
+    """Pedidos do centro com data e preço, como (candidato, linha). Linhas de
+    subtotal, itens sem preço (grátis) e pedidos de outros centros ficam de fora."""
     for ordem, linha in enumerate(grade.valores(list(colunas.values()))):
+        if "centro" in colunas and linha[colunas["centro"]].strip() != CENTRO:
+            continue
         data = data_iso(linha[colunas["data"]])
         preco = numero(linha[colunas["preco"]])
         por = numero(linha[colunas["por"]]) or 1

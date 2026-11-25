@@ -536,6 +536,8 @@ class GradeSimulada:
             por = 100 if base % 2 else 1
             preco = base * por + 0.18
             self._linhas += [
+                {"MATNR": material, "TXZ01": "Outro centro", "EBELN": "4509999999", "EBELP": "10",
+                 "BEDAT": "24.11.2026", "WERKS": "8100", "NETPR": "1,00", "WAERS": "EUR", "PEINH": "1"},
                 {"MATNR": material, "TXZ01": "Chicote PWR Relé %s" % material[-3:], "EBELN": "4501707798", "EBELP": "20", "BEDAT": "16.11.2026", "WERKS": "8500",
                  "NETPR": ("%.2f" % preco).replace(".", ","), "WAERS": "EUR", "PEINH": str(por)},
                 {"MATNR": material, "TXZ01": "Chicote PWR Relé %s" % material[-3:], "EBELN": "4501672232", "EBELP": "110", "BEDAT": "20.08.2026", "WERKS": "8500",
