@@ -14,7 +14,7 @@ basta ter o Python 3.8 ou mais novo.
 | Comando        | O que faz                                                        |
 |----------------|------------------------------------------------------------------|
 | `/pdfs`        | Abre no navegador o PDF de cada part number (MD04, centro 8500)  |
-| `/precos`      | Preço do pedido de compra mais recente de cada part number (ME2M) |
+| `/precos`      | Preço do pedido de compra mais recente de cada part number (ME2M, centro 8500) |
 | `/login`       | Abre o SAP e faz login com as credenciais salvas                 |
 | `/customizar`  | Muda o estilo da logo: `/customizar fill` ou `/customizar hollow` |
 | `/atualizar`   | Baixa e instala a versão mais nova do app                        |
@@ -51,6 +51,8 @@ do SAP, que é fechada no fim.
 - A seleção múltipla é preenchida pela área de transferência, que depois recebe os
   preços.
 - O preço é dividido pela **unidade de preço**: 13,03 EUR por 100 vira 0,1303 EUR.
+- Só considera pedidos do **centro 8500**: o centro é preenchido na seleção da
+  ME2M e, por garantia, linhas de outros centros são descartadas pela coluna Cen.
 - "Mais recente" é o pedido com a **Data doc.** mais nova. O **texto breve** é o
   desse mesmo pedido.
 - Itens com preço zero e linhas de subtotal são ignorados.
