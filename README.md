@@ -70,6 +70,35 @@ Para usar com o Excel ou o Google Sheets:
 Também dá para passar direto: `/precos 60103019 60217124`. Os números saem com
 vírgula decimal e sem separador de milhar, como o Excel e o Sheets em português leem.
 
+### Com uma planilha `.xlsx`
+
+Passe o caminho do arquivo (ou arraste o arquivo para o terminal depois de digitar
+`/precos`):
+
+    /precos C:\Users\voce\Documents\precos.xlsx
+
+Formato esperado, na primeira aba:
+
+| A          | B         | C     | D     |
+|------------|-----------|-------|-------|
+| PartNumber | Descrição | Preço | Moeda |
+| 60103019   |           |       |       |
+| 60217124   |           |       |       |
+
+- Os part numbers são lidos da **coluna A**, quantos houver. A linha 1 é tratada
+  como cabeçalho quando não tem números.
+- O app preenche **Descrição** (texto breve), **Preço** (unitário, já dividido pela
+  unidade de preço, gravado como número) e **Moeda**. As colunas são achadas pelo
+  cabeçalho; sem cabeçalho, usa B, C e D.
+- Só essas células mudam: formatação, outras colunas e outras abas ficam como
+  estavam. Linhas sem pedido não são alteradas.
+- **Feche o arquivo no Excel antes**; se ele estiver aberto, o app avisa antes de
+  consultar o SAP.
+- Com o Google Sheets: Arquivo > Fazer download > Microsoft Excel (.xlsx), rode o
+  `/precos` e importe o arquivo de volta.
+
+O `/pdfs` também aceita uma planilha, lendo os part numbers da coluna A.
+
 ## Login automático
 
 O comando `/login` abre o SAP Logon (se estiver fechado), abre a conexão e entra
@@ -135,6 +164,7 @@ salva em `.horsch-terminal\preferencias.ini`, na sua pasta de usuário.
 - `src/historico.py`: histórico de comandos.
 - `src/atualizador.py`: comando `/atualizar`.
 - `src/area_de_transferencia.py`: copiar texto para o Ctrl+V.
+- `src/planilha.py`: leitura e preenchimento de `.xlsx`, sem bibliotecas externas.
 - `src/tela.py`: desenho da tela e leitura do teclado.
 - `src/app.py`: comandos, lista de itens e execução.
 - `macros/`: uma macro por arquivo.
