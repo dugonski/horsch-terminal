@@ -75,6 +75,7 @@ def por_lote(sap, materiais):
     for material in materiais:
         candidatos = por_material.get(_chave(material))
         resultado[material] = _mais_recente(candidatos) if candidatos else ErroSap(SEM_PEDIDO)
+    Preco.ajustar_colunas([valor for valor in resultado.values() if isinstance(valor, Preco)])
     return resultado
 
 
@@ -215,6 +216,18 @@ class Preco:
     def __init__(self, preco, por, moeda, documento, data, texto=""):
         self.preco, self.por, self.moeda, self.documento, self.data = preco, por, moeda, documento, data
         self.texto = " ".join(texto.split())  # sem tabs ou quebras, para não desalinhar a colagem
+        self.largura_do_texto, self.largura_do_preco = self.LARGURA_DO_TEXTO, self.LARGURA_DO_PRECO
+
+    @classmethod
+    def ajustar_colunas(cls, precos):
+        """Na consulta única todos os resultados chegam juntos: as colunas ficam com a
+        largura do maior texto e do maior preço, em vez do máximo possível."""
+        if not precos:
+            return
+        texto = min(cls.LARGURA_DO_TEXTO, max(len(preco.texto) for preco in precos))
+        valor = max(len(preco.unitario_texto()) for preco in precos)
+        for preco in precos:
+            preco.largura_do_texto, preco.largura_do_preco = texto, valor
 
     @property
     def unitario(self):
@@ -223,7 +236,8 @@ class Preco:
     def unitario_texto(self):
         return decimal(self.unitario, maximo=4)
 
-    # Larguras das colunas na tela. O texto breve do SAP tem no máximo 40 caracteres.
+    # Larguras máximas das colunas na tela (o texto breve do SAP tem até 40 caracteres).
+    # Consultando um part number por vez, cada linha sai antes das outras e usa estas.
     LARGURA_DO_TEXTO = 40
     LARGURA_DO_PRECO = 10
 
@@ -231,10 +245,10 @@ class Preco:
         """Uma linha em colunas de largura fixa: texto breve, preço unitário e moeda,
         data e pedido; o preço original (por 100 etc.) vai no fim."""
         texto = self.texto
-        if len(texto) > self.LARGURA_DO_TEXTO:
-            texto = texto[:self.LARGURA_DO_TEXTO - 1] + "…"
-        colunas = [texto.ljust(self.LARGURA_DO_TEXTO),
-                   self.unitario_texto().rjust(self.LARGURA_DO_PRECO) + " " + self.moeda.ljust(3),
+        if len(texto) > self.largura_do_texto:
+            texto = texto[:self.largura_do_texto - 1] + "…"
+        colunas = [texto.ljust(self.largura_do_texto),
+                   self.unitario_texto().rjust(self.largura_do_preco) + " " + self.moeda.ljust(3),
                    ".".join(reversed(self.data.split("-")))]
         if self.documento:
             colunas.append("pedido " + self.documento)
