@@ -6,6 +6,7 @@ para a área de transferência na mesma ordem da lista colada, para colar de vol
 no Excel ou no Google Sheets.
 """
 import re
+import unicodedata
 
 from src.sap import ErroSap
 
@@ -161,6 +162,55 @@ def concluir(linhas, resultados):
     # Sem área de transferência: mostra na tela, para copiar à mão.
     return ["Não foi possível copiar automaticamente. Preços na ordem da lista:"] + [
         valor.replace("\t", "  ") or "-" for valor in valores]
+
+
+# Colunas da planilha: achadas pelo cabeçalho da linha 1; sem cabeçalho, B, C e D.
+# (coluna padrão, nomes aceitos no cabeçalho, título escrito quando ele está vazio)
+COLUNAS_DA_PLANILHA = {
+    "descricao": ("B", ("descricao", "texto breve", "texto"), "Descrição"),
+    "preco": ("C", ("preco", "preco unitario", "preco liquido"), "Preço"),
+    "moeda": ("D", ("moeda",), "Moeda"),
+}
+
+
+def preencher_planilha(caminho, linhas, cabecalho, resultados):
+    """Grava descrição (texto breve), preço unitário e moeda ao lado de cada part
+    number da planilha. Linhas sem pedido ficam como estavam."""
+    from src import planilha
+
+    titulos = {_sem_acento(titulo): coluna for coluna, titulo in cabecalho.items()}
+    colunas = {}
+    for chave, (padrao, nomes, _) in COLUNAS_DA_PLANILHA.items():
+        colunas[chave] = next((titulos[nome] for nome in nomes if nome in titulos), padrao)
+
+    valores, estilos = {}, {}
+    # Linha 1 é cabeçalho (não é um part number): completa os títulos que faltam, com a
+    # formatação da A1, sem trocar um título já escrito.
+    if cabecalho and all(linha != 1 for linha, _ in linhas):
+        faltando = {colunas[chave]: titulo for chave, (_, _, titulo) in COLUNAS_DA_PLANILHA.items()
+                    if not cabecalho.get(colunas[chave])}
+        if faltando:
+            valores[1], estilos[1] = faltando, "A"
+
+    for linha, pn in linhas:
+        resultado = resultados.get(pn)
+        if resultado:
+            valores[linha] = {colunas["descricao"]: resultado.texto,
+                              colunas["preco"]: round(resultado.unitario, 6),
+                              colunas["moeda"]: resultado.moeda}
+    preenchidas = len([linha for linha in valores if linha != 1 or 1 not in estilos])
+    if not preenchidas:
+        return ["Nenhum preço encontrado; a planilha não foi alterada."]
+    planilha.preencher(caminho, valores, estilos)
+    mensagens = ["Planilha preenchida: %d de %d linhas (%s)." % (preenchidas, len(linhas), caminho)]
+    if preenchidas < len(linhas):
+        mensagens.append("Linhas sem pedido no centro %s ficaram como estavam." % CENTRO)
+    return mensagens
+
+
+def _sem_acento(texto):
+    texto = unicodedata.normalize("NFKD", texto.strip().lower())
+    return "".join(letra for letra in texto if not unicodedata.combining(letra))
 
 
 class Preco:
