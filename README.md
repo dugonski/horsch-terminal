@@ -90,6 +90,8 @@ Formato esperado, na primeira aba:
 - O app preenche **Descrição** (texto breve), **Preço** (unitário, já dividido pela
   unidade de preço, gravado como número) e **Moeda**. As colunas são achadas pelo
   cabeçalho; sem cabeçalho, usa B, C e D.
+- Se a linha 1 for cabeçalho, os títulos que faltarem (Descrição, Preço, Moeda) são
+  escritos com a mesma formatação da A1. Títulos que já existem não são trocados.
 - Só essas células mudam: formatação, outras colunas e outras abas ficam como
   estavam. Linhas sem pedido não são alteradas.
 - **Feche o arquivo no Excel antes**; se ele estiver aberto, o app avisa antes de
