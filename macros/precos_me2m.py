@@ -202,10 +202,9 @@ def preencher_planilha(caminho, linhas, cabecalho, resultados):
     if not preenchidas:
         return ["Nenhum preço encontrado; a planilha não foi alterada."]
     planilha.preencher(caminho, valores, estilos)
-    mensagens = ["Planilha preenchida: %d de %d linhas (%s)." % (preenchidas, len(linhas), caminho)]
     if preenchidas < len(linhas):
-        mensagens.append("Linhas sem pedido no centro %s ficaram como estavam." % CENTRO)
-    return mensagens
+        return ["Linhas sem pedido no centro %s ficaram como estavam na planilha." % CENTRO]
+    return []
 
 
 def _sem_acento(texto):
