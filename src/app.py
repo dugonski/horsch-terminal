@@ -10,8 +10,6 @@ import time
 from . import atualizador, credenciais, historico, logo, planilha, preferencias, sap
 from .tela import BOM, DESTAQUE, FRACO, RUIM, TITULO, Teclado, Tela
 
-DICA = "Digite / para ver os comandos · /ajuda para ajuda"
-
 
 class Comando:
     def __init__(self, nome, descricao, macro=None):
@@ -34,8 +32,8 @@ def carregar_macros(pasta):
 
 class App:
     def __init__(self, versao, raiz):
-        bits = struct.calcsize("P") * 8
-        self.versao = "%s (%d bits)" % (versao, bits)
+        self.versao = versao
+        self.bits = struct.calcsize("P") * 8  # só para o /diagnostico
         self.versao_numero, self.raiz = versao, raiz
         self.tela = Tela()
         self.comandos = [Comando(m.COMANDO, m.DESCRICAO, m) for m in carregar_macros(os.path.join(raiz, "macros"))]
@@ -110,7 +108,6 @@ class App:
         if sap.SIMULAR:
             legenda.append(("  [simulação]", RUIM))
         self.tela.imprimir(*legenda)
-        self.tela.imprimir((DICA, FRACO))
         self.tela.imprimir()
 
     # ---- teclado ----
@@ -324,7 +321,7 @@ class App:
             self.sair = True
 
     def diagnosticar(self):
-        self.tela.imprimir(("  App v%s · Python %s · %s" % (self.versao, platform.python_version(), platform.platform()), FRACO))
+        self.tela.imprimir(("  App v%s (%d bits) · Python %s · %s" % (self.versao, self.bits, platform.python_version(), platform.platform()), FRACO))
         self.mostrar_andamento("Testando a conexão com o SAP...", cancelavel=False)
         for passo, resultado, ok in sap.diagnosticar():
             self.tela.imprimir(("  √ " if ok else "  × ", BOM if ok else RUIM), passo, ("  " + resultado, FRACO))
