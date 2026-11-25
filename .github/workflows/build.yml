@@ -5,9 +5,16 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  release:
+    types: [published]  # Release criada pela página do GitHub
 
 permissions:
   contents: write
+
+# A mesma tag pode disparar o push e o release: um de cada vez.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   pacote:
@@ -39,6 +46,12 @@ jobs:
           # Tags com sufixo (v0.10.3-alpha, v1.0.0-beta.1...) saem como pré-lançamento.
           previa=""
           case "$GITHUB_REF_NAME" in *-*) previa="--prerelease" ;; esac
-          gh release create "$GITHUB_REF_NAME" dist/horsch-terminal.zip --title "$GITHUB_REF_NAME" --notes-file notas.md $previa
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            # Release já criada pela página do GitHub: anexa o zip e escreve o changelog nela.
+            gh release upload "$GITHUB_REF_NAME" dist/horsch-terminal.zip --clobber
+            gh release edit "$GITHUB_REF_NAME" --notes-file notas.md $previa
+          else
+            gh release create "$GITHUB_REF_NAME" dist/horsch-terminal.zip --title "$GITHUB_REF_NAME" --notes-file notas.md $previa
+          fi
         env:
           GH_TOKEN: ${{ github.token }}
