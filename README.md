@@ -62,8 +62,8 @@ Para usar com o Excel ou o Google Sheets:
 1. Selecione a coluna de part numbers (pode incluir a coluna de preço ao lado) e
    copie com Ctrl+C.
 2. No terminal, digite `/precos`, cole e tecle Enter duas vezes.
-3. No fim, preço e texto breve já estão copiados, um part number por linha e na
-   mesma ordem da lista. Clique na primeira célula da coluna de preço e cole com
+3. No fim aparece "Conteúdo copiado para o Ctrl+V": preço e texto breve já estão
+   copiados, um part number por linha e na mesma ordem da lista. Clique na primeira célula da coluna de preço e cole com
    Ctrl+V: o preço fica nessa coluna e o texto breve na seguinte. Linhas vazias ou
    sem pedido ficam em branco, então o alinhamento se mantém.
 

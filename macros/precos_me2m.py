@@ -157,8 +157,7 @@ def concluir(linhas, resultados):
         resultado = resultados.get(pn) if pn else None
         valores.append("%s\t%s" % (resultado.unitario_texto(), resultado.texto) if resultado else "")
     if area_de_transferencia.copiar("\n".join(valores)):
-        return ["Preços e textos copiados (%d linhas): cole na coluna ao lado dos part numbers com Ctrl+V." % len(valores),
-                "O preço vai na primeira coluna e o texto breve na seguinte. Linhas sem preço ficam em branco."]
+        return ["Conteúdo copiado para o Ctrl+V"]
     # Sem área de transferência: mostra na tela, para copiar à mão.
     return ["Não foi possível copiar automaticamente. Preços na ordem da lista:"] + [
         valor.replace("\t", "  ") or "-" for valor in valores]
@@ -224,15 +223,24 @@ class Preco:
     def unitario_texto(self):
         return decimal(self.unitario, maximo=4)
 
+    # Larguras das colunas na tela. O texto breve do SAP tem no máximo 40 caracteres.
+    LARGURA_DO_TEXTO = 40
+    LARGURA_DO_PRECO = 10
+
     def __str__(self):
-        texto = "%s %s" % (self.unitario_texto(), self.moeda)
-        if self.texto:
-            texto = "%s · %s" % (self.texto, texto)
-        if self.por != 1:
-            texto += " · %s %s por %s" % (decimal(self.preco), self.moeda, decimal(self.por, minimo=0))
+        """Uma linha em colunas de largura fixa: texto breve, preço unitário e moeda,
+        data e pedido; o preço original (por 100 etc.) vai no fim."""
+        texto = self.texto
+        if len(texto) > self.LARGURA_DO_TEXTO:
+            texto = texto[:self.LARGURA_DO_TEXTO - 1] + "…"
+        colunas = [texto.ljust(self.LARGURA_DO_TEXTO),
+                   self.unitario_texto().rjust(self.LARGURA_DO_PRECO) + " " + self.moeda.ljust(3),
+                   ".".join(reversed(self.data.split("-")))]
         if self.documento:
-            texto += " · pedido %s" % self.documento
-        return texto + " de %s" % ".".join(reversed(self.data.split("-")))
+            colunas.append("pedido " + self.documento)
+        if self.por != 1:
+            colunas.append("(%s %s por %s)" % (decimal(self.preco), self.moeda, decimal(self.por, minimo=0)))
+        return "  ".join(colunas)
 
 
 def _completar_com_ocultas(grade, colunas, chaves):
