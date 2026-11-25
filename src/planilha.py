@@ -139,9 +139,15 @@ def _celula_nova(prefixo, referencia, valor, estilo):
         prefixo, atributos, prefixo, prefixo, texto, prefixo, prefixo, prefixo)
 
 
-def _preencher_linha(conteudo, prefixo, linha, valores):
-    """Troca ou insere as células de uma linha, mantendo a ordem das colunas."""
+def _preencher_linha(conteudo, prefixo, linha, valores, estilo_de=None):
+    """Troca ou insere as células de uma linha, mantendo a ordem das colunas. Com
+    estilo_de (ex.: "A"), células novas copiam a formatação dessa coluna na linha."""
     padrao_celula = re.compile(r'<%sc\b[^>]*?\br="([A-Z]+)%d"[^>]*?(?:/>|>.*?</%sc>)' % (prefixo, linha, prefixo), re.S)
+    estilo_novo = None
+    if estilo_de:
+        modelo = next((celula for celula in padrao_celula.finditer(conteudo) if celula.group(1) == estilo_de), None)
+        encontrado = re.search(r'\bs="(\d+)"', modelo.group(0).split(">", 1)[0]) if modelo else None
+        estilo_novo = encontrado.group(1) if encontrado else None
     for coluna, valor in sorted(valores.items(), key=lambda item: _indice_da_coluna(item[0])):
         referencia = "%s%d" % (coluna, linha)
         existentes = list(padrao_celula.finditer(conteudo))
@@ -151,7 +157,7 @@ def _preencher_linha(conteudo, prefixo, linha, valores):
             nova = _celula_nova(prefixo, referencia, valor, estilo.group(1) if estilo else None)
             conteudo = conteudo[:atual.start()] + nova + conteudo[atual.end():]
             continue
-        nova = _celula_nova(prefixo, referencia, valor, None)
+        nova = _celula_nova(prefixo, referencia, valor, estilo_novo)
         depois = next((celula for celula in existentes
                        if _indice_da_coluna(celula.group(1)) > _indice_da_coluna(coluna)), None)
         posicao = depois.start() if depois else len(conteudo)
@@ -159,10 +165,11 @@ def _preencher_linha(conteudo, prefixo, linha, valores):
     return conteudo
 
 
-def preencher(caminho, valores):
+def preencher(caminho, valores, estilos=None):
     """Grava os valores {número da linha: {coluna: valor}} na primeira aba. Números
     viram células numéricas; textos, células de texto. As linhas já têm de existir
-    (são as linhas dos part numbers)."""
+    (são as linhas dos part numbers). estilos = {linha: coluna}: as células novas
+    daquela linha copiam a formatação da coluna indicada (ex.: o cabeçalho da A1)."""
     with _abrir(caminho) as pacote:
         aba = _caminho_da_primeira_aba(pacote)
         xml = pacote.read(aba).decode("utf-8")
@@ -175,7 +182,7 @@ def preencher(caminho, valores):
         encontrada = padrao_linha.search(xml)
         if not encontrada:
             continue
-        conteudo = _preencher_linha(encontrada.group(2), prefixo, linha, colunas)
+        conteudo = _preencher_linha(encontrada.group(2), prefixo, linha, colunas, (estilos or {}).get(linha))
         xml = xml[:encontrada.start(2)] + conteudo + xml[encontrada.end(2):]
 
     pasta = os.path.dirname(os.path.abspath(caminho))

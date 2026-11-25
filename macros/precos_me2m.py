@@ -165,10 +165,11 @@ def concluir(linhas, resultados):
 
 
 # Colunas da planilha: achadas pelo cabeçalho da linha 1; sem cabeçalho, B, C e D.
+# (coluna padrão, nomes aceitos no cabeçalho, título escrito quando ele está vazio)
 COLUNAS_DA_PLANILHA = {
-    "descricao": ("B", ("descricao", "texto breve", "texto")),
-    "preco": ("C", ("preco", "preco unitario", "preco liquido")),
-    "moeda": ("D", ("moeda",)),
+    "descricao": ("B", ("descricao", "texto breve", "texto"), "Descrição"),
+    "preco": ("C", ("preco", "preco unitario", "preco liquido"), "Preço"),
+    "moeda": ("D", ("moeda",), "Moeda"),
 }
 
 
@@ -179,21 +180,30 @@ def preencher_planilha(caminho, linhas, cabecalho, resultados):
 
     titulos = {_sem_acento(titulo): coluna for coluna, titulo in cabecalho.items()}
     colunas = {}
-    for chave, (padrao, nomes) in COLUNAS_DA_PLANILHA.items():
+    for chave, (padrao, nomes, _) in COLUNAS_DA_PLANILHA.items():
         colunas[chave] = next((titulos[nome] for nome in nomes if nome in titulos), padrao)
 
-    valores = {}
+    valores, estilos = {}, {}
+    # Linha 1 é cabeçalho (não é um part number): completa os títulos que faltam, com a
+    # formatação da A1, sem trocar um título já escrito.
+    if cabecalho and all(linha != 1 for linha, _ in linhas):
+        faltando = {colunas[chave]: titulo for chave, (_, _, titulo) in COLUNAS_DA_PLANILHA.items()
+                    if not cabecalho.get(colunas[chave])}
+        if faltando:
+            valores[1], estilos[1] = faltando, "A"
+
     for linha, pn in linhas:
         resultado = resultados.get(pn)
         if resultado:
             valores[linha] = {colunas["descricao"]: resultado.texto,
                               colunas["preco"]: round(resultado.unitario, 6),
                               colunas["moeda"]: resultado.moeda}
-    if not valores:
+    preenchidas = len([linha for linha in valores if linha != 1 or 1 not in estilos])
+    if not preenchidas:
         return ["Nenhum preço encontrado; a planilha não foi alterada."]
-    planilha.preencher(caminho, valores)
-    mensagens = ["Planilha preenchida: %d de %d linhas (%s)." % (len(valores), len(linhas), caminho)]
-    if len(valores) < len(linhas):
+    planilha.preencher(caminho, valores, estilos)
+    mensagens = ["Planilha preenchida: %d de %d linhas (%s)." % (preenchidas, len(linhas), caminho)]
+    if preenchidas < len(linhas):
         mensagens.append("Linhas sem pedido no centro %s ficaram como estavam." % CENTRO)
     return mensagens
 
