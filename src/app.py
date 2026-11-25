@@ -208,13 +208,25 @@ class App:
         elif tecla == "enter":
             linha = self.texto.strip()
             self.definir_texto("")
+            colando = desde_anterior < 0.15
             if linha:
-                self.adicionar_itens(linha)
-            # Linha em branco no meio de uma colagem não deve disparar a macro.
-            elif self.itens and desde_anterior >= 0.15:
+                self.adicionar_itens(linha, primeira_coluna=self.por_linha())
+            # Linha em branco no meio de uma colagem não dispara a macro; nas macros que
+            # trabalham por linha ela vira uma linha vazia, para o resultado ficar alinhado.
+            elif colando:
+                if self.por_linha() and self.itens:
+                    self.itens.append("")
+            elif any(self.itens):
                 self.executar_macro()
+        elif tecla == "tab":
+            self.editar_texto(" ")  # colunas coladas do Excel/Sheets vêm separadas por tab
         else:
             self.editar_texto(tecla)
+
+    def por_linha(self):
+        """Macros com LINHAS = True recebem uma linha da lista por item, na ordem,
+        com repetidos e linhas vazias, e só a primeira coluna de cada linha."""
+        return bool(getattr(self.ativa, "LINHAS", False))
 
     # ---- comandos ----
 
@@ -222,10 +234,17 @@ class App:
         self.ativa, self.itens = None, []
         self.definir_texto("")
 
-    def adicionar_itens(self, texto):
-        """Separa por espaço, vírgula, ponto e vírgula ou quebra de linha, sem repetir."""
+    def adicionar_itens(self, texto, primeira_coluna=False):
+        """Separa por espaço, vírgula, ponto e vírgula ou quebra de linha. Com
+        primeira_coluna, cada linha vira um item (só o primeiro valor dela, já que a
+        vírgula pode ser decimal numa coluna de preço ao lado)."""
+        if primeira_coluna:
+            for linha in texto.splitlines():
+                valores = re.split(r"[\s;]+", linha.strip())
+                self.itens.append(valores[0] if valores else "")
+            return
         for item in re.split(r"[\s,;]+", texto):
-            if item and item not in self.itens:
+            if item and (self.por_linha() or item not in self.itens):
                 self.itens.append(item)
 
     def executar_comando(self, linha):
@@ -349,7 +368,14 @@ class App:
         return "esc" in teclas or "ctrl-c" in teclas
 
     def executar_macro(self):
-        macro, itens = self.ativa, list(self.itens)
+        macro, linhas = self.ativa, list(self.itens)
+        while linhas and not linhas[-1]:
+            linhas.pop()
+        itens = []  # cada item roda uma vez só, mesmo se aparecer em várias linhas
+        for item in linhas:
+            if item and item not in itens:
+                itens.append(item)
+        resultados = {}
         total, feitos, falhas = len(itens), 0, []
         cancelado, erro_geral = False, None
 
@@ -367,23 +393,52 @@ class App:
         except Exception as erro:
             erro_geral = str(erro)
 
+        def registrar(item, retorno):
+            nonlocal feitos
+            resultados[item] = retorno
+            feitos += 1
+            texto = str(retorno) if retorno is not None else getattr(macro, "SUCESSO", "ok")
+            self.tela.imprimir(("  √ ", BOM), item, ("  " + texto, FRACO))
+
+        def falhar(item, erro):
+            falhas.append(item)
+            self.tela.imprimir(("  × ", RUIM), item, ("  %s" % erro, RUIM))
+
+        # por_lote() trata todos os itens de uma vez e devolve {item: resultado ou exceção}.
+        # Se ele não conseguir, a macro segue item a item com por_item().
+        pendentes = list(itens)
+        if preparada and itens and hasattr(macro, "por_lote"):
+            self.mostrar_andamento("Consultando %d %s de uma vez..." % (total, macro.ROTULO), cancelavel=False)
+            try:
+                lote = macro.por_lote(sessao, list(itens))
+            except Exception as erro:
+                lote = None
+                self.tela.imprimir(("  Consulta única indisponível (%s); consultando um por vez." % erro, FRACO))
+            if lote is not None:
+                pendentes = []
+                for item in itens:
+                    retorno = lote.get(item)
+                    if isinstance(retorno, Exception):
+                        falhar(item, retorno)
+                    elif retorno is None:
+                        falhar(item, "sem resultado")
+                    else:
+                        registrar(item, retorno)
+
         try:
             if preparada:
-                for indice, item in enumerate(itens, 1):
+                for indice, item in enumerate(pendentes, 1):
                     try:
                         if self.pediu_cancelamento():
                             cancelado = True
                             break
-                        self.mostrar_andamento("Processando %d/%d · %s" % (indice, total, item))
-                        macro.por_item(sessao, item)
-                        feitos += 1
-                        self.tela.imprimir(("  √ ", BOM), item, ("  " + getattr(macro, "SUCESSO", "ok"), FRACO))
+                        self.mostrar_andamento("Processando %d/%d · %s" % (indice, len(pendentes), item))
+                        registrar(item, macro.por_item(sessao, item))
                     except KeyboardInterrupt:
                         cancelado = True
                         break
                     except Exception as erro:
-                        falhas.append(item)
-                        self.tela.imprimir(("  × ", RUIM), item, ("  %s" % erro, RUIM))
+                        falhar(item, erro)
         finally:
             if preparada and hasattr(macro, "fim"):
                 self.mostrar_andamento("Finalizando...", cancelavel=False)
@@ -394,6 +449,13 @@ class App:
 
         if aviso_do_fim:
             self.tela.imprimir(("  × Ao finalizar: " + aviso_do_fim, RUIM))
+        # concluir() recebe as linhas da lista e o que por_item devolveu para cada item.
+        if preparada and resultados and hasattr(macro, "concluir"):
+            try:
+                for linha in macro.concluir(linhas, resultados) or []:
+                    self.tela.imprimir(("  " + linha, TITULO))
+            except Exception as erro:
+                self.tela.imprimir(("  × Ao concluir: %s" % erro, RUIM))
         if erro_geral is not None:
             self.tela.imprimir(("  × " + erro_geral, RUIM))
         elif cancelado:
@@ -412,7 +474,8 @@ class App:
         linhas = []
         na_lista = self.ativa is not None
         if na_lista:
-            linhas.append([("  " + self.ativa.TITULO, TITULO), (" · %d %s na lista" % (len(self.itens), self.ativa.ROTULO), FRACO)])
+            quantidade = len({item for item in self.itens if item})
+            linhas.append([("  " + self.ativa.TITULO, TITULO), (" · %d %s na lista" % (quantidade, self.ativa.ROTULO), FRACO)])
 
         # caixa de entrada: mostra o trecho do texto em volta do cursor
         borda = DESTAQUE if na_lista else FRACO

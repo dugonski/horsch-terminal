@@ -14,6 +14,7 @@ basta ter o Python 3.8 ou mais novo.
 | Comando        | O que faz                                                        |
 |----------------|------------------------------------------------------------------|
 | `/pdfs`        | Abre no navegador o PDF de cada part number (MD04, centro 8500)  |
+| `/precos`      | Preço do pedido de compra mais recente de cada part number (ME2M, centro 8500) |
 | `/login`       | Abre o SAP e faz login com as credenciais salvas                 |
 | `/customizar`  | Muda o estilo da logo: `/customizar fill` ou `/customizar hollow` |
 | `/atualizar`   | Baixa e instala a versão mais nova do app                        |
@@ -35,6 +36,39 @@ Se a conexão com o SAP falhar, rode `/diagnostico` para ver em que passo.
 
 Para testar sem SAP, rode `python main.py --simular` (qualquer item contendo
 "erro" falha).
+
+## Preços (`/precos`)
+
+Busca na ME2M o preço do pedido de compra mais recente de cada part number, lendo
+a lista direto da tela do SAP (sem exportar para planilha). Roda numa janela nova
+do SAP, que é fechada no fim.
+
+- Faz **uma consulta só** com todos os part numbers (seleção múltipla da ME2M). Para
+  isso, a lista precisa mostrar a coluna **Material**. Se o seu layout não tiver
+  essa coluna, o app avisa e consulta um part number por vez, o que funciona igual,
+  só mais devagar. Para ativar a consulta única, inclua a coluna Material no layout
+  da ME2M (Alterar layout, Ctrl+F8) e salve como layout padrão.
+- A seleção múltipla é preenchida pela área de transferência, que depois recebe os
+  preços.
+- O preço é dividido pela **unidade de preço**: 13,03 EUR por 100 vira 0,1303 EUR.
+- Só considera pedidos do **centro 8500**: o centro é preenchido na seleção da
+  ME2M e, por garantia, linhas de outros centros são descartadas pela coluna Cen.
+- "Mais recente" é o pedido com a **Data doc.** mais nova. O **texto breve** é o
+  desse mesmo pedido.
+- Itens com preço zero e linhas de subtotal são ignorados.
+
+Para usar com o Excel ou o Google Sheets:
+
+1. Selecione a coluna de part numbers (pode incluir a coluna de preço ao lado) e
+   copie com Ctrl+C.
+2. No terminal, digite `/precos`, cole e tecle Enter duas vezes.
+3. No fim, preço e texto breve já estão copiados, um part number por linha e na
+   mesma ordem da lista. Clique na primeira célula da coluna de preço e cole com
+   Ctrl+V: o preço fica nessa coluna e o texto breve na seguinte. Linhas vazias ou
+   sem pedido ficam em branco, então o alinhamento se mantém.
+
+Também dá para passar direto: `/precos 60103019 60217124`. Os números saem com
+vírgula decimal e sem separador de milhar, como o Excel e o Sheets em português leem.
 
 ## Login automático
 
@@ -100,6 +134,7 @@ salva em `.horsch-terminal\preferencias.ini`, na sua pasta de usuário.
 - `src/preferencias.py`: estilo da logo escolhido em `/customizar`.
 - `src/historico.py`: histórico de comandos.
 - `src/atualizador.py`: comando `/atualizar`.
+- `src/area_de_transferencia.py`: copiar texto para o Ctrl+V.
 - `src/tela.py`: desenho da tela e leitura do teclado.
 - `src/app.py`: comandos, lista de itens e execução.
 - `macros/`: uma macro por arquivo.
@@ -120,6 +155,14 @@ comandos. Copie `macros/pdfs_md04.py`, troque o `COMANDO` e escreva os passos em
 
 `sap.conferir_status()` interrompe o item com a mensagem do SAP quando a barra de
 status mostra erro.
+
+Em `por_item`, o que a função devolver aparece ao lado do item na tela. Uma macro
+também pode definir `por_lote(sap, itens)`, que trata todos de uma vez e devolve
+`{item: resultado}`; se ela der erro, o app usa `por_item` para cada um. Com
+`LINHAS = True`, a macro recebe a lista linha a linha (com repetidos e linhas
+vazias) e pode definir `concluir(linhas, resultados)` para fazer algo no fim, como
+copiar os resultados. Veja `macros/precos_me2m.py`. Para ler uma lista em grade
+(ALV) da tela, use `sap.grade()`.
 
 Para a macro rodar numa janela nova do SAP, devolva `sap.nova_janela("transacao")`
 em `inicio` e feche com `sap.fechar()` em `fim`, que roda sempre no final. Veja

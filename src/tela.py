@@ -133,6 +133,14 @@ class Teclado:
                    "[H": "home", "[F": "end", "[1~": "home", "[4~": "end", "[3~": "delete",
                    "OH": "home", "OF": "end"}
 
+    def __init__(self):
+        self._anterior = ""  # para tratar \r\n (colado do Excel/Sheets) como uma quebra só
+
+    def _quebra_repetida(self, letra):
+        repetida = letra == "\n" and self._anterior == "\r"
+        self._anterior = letra
+        return repetida
+
     def __enter__(self):
         if os.name != "nt":
             import termios
@@ -141,6 +149,10 @@ class Teclado:
             self._arquivo = sys.stdin.fileno()
             self._modo_anterior = termios.tcgetattr(self._arquivo)
             tty.setcbreak(self._arquivo)
+            # Sem converter \r em \n, um \r\n colado chega como está e conta como uma quebra só.
+            modo = termios.tcgetattr(self._arquivo)
+            modo[0] &= ~termios.ICRNL
+            termios.tcsetattr(self._arquivo, termios.TCSANOW, modo)
         return self
 
     def __exit__(self, *_):
@@ -158,6 +170,8 @@ class Teclado:
         teclas = []
         while msvcrt.kbhit():
             letra = msvcrt.getwch()
+            if self._quebra_repetida(letra):
+                continue
             if letra in ("\x00", "\xe0"):  # tecla especial: vem em dois passos
                 tecla = self._ESPECIAIS_WINDOWS.get(msvcrt.getwch())
                 if tecla:
@@ -179,6 +193,8 @@ class Teclado:
         while indice < len(texto):
             letra = texto[indice]
             indice += 1
+            if self._quebra_repetida(letra):
+                continue
             if letra == "\x1b":
                 for sequencia, tecla in self._SEQUENCIAS.items():
                     if texto.startswith(sequencia, indice):
