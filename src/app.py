@@ -7,7 +7,7 @@ import re
 import struct
 import time
 
-from . import atualizador, credenciais, historico, logo, preferencias, sap
+from . import atualizador, credenciais, historico, logo, planilha, preferencias, sap
 from .tela import BOM, DESTAQUE, FRACO, RUIM, TITULO, Teclado, Tela
 
 DICA = "Digite / para ver os comandos · /ajuda para ajuda"
@@ -60,6 +60,7 @@ class App:
         self.rascunho = ""         # o que estava digitado antes de navegar
         self.ativa = None       # macro recebendo a lista
         self.itens = []
+        self.planilha = None    # (caminho, [(linha, part number)], cabeçalho) quando a lista veio de um .xlsx
         self.ultima_tecla = 0.0
 
     # ---- laço principal ----
@@ -209,7 +210,10 @@ class App:
             linha = self.texto.strip()
             self.definir_texto("")
             colando = desde_anterior < 0.15
-            if linha:
+            if linha and not any(self.itens) and planilha.eh_planilha(linha):
+                if self.carregar_planilha(linha):
+                    self.executar_macro()
+            elif linha:
                 self.adicionar_itens(linha, primeira_coluna=self.por_linha())
             # Linha em branco no meio de uma colagem não dispara a macro; nas macros que
             # trabalham por linha ela vira uma linha vazia, para o resultado ficar alinhado.
@@ -231,8 +235,35 @@ class App:
     # ---- comandos ----
 
     def voltar_ao_comando(self):
-        self.ativa, self.itens = None, []
+        self.ativa, self.itens, self.planilha = None, [], None
         self.definir_texto("")
+
+    def carregar_planilha(self, texto):
+        """Lê os part numbers da coluna A da primeira aba de um .xlsx. A linha 1 é
+        tratada como cabeçalho quando não tem números (ex.: "PartNumber")."""
+        caminho = planilha.eh_planilha(texto)
+        try:
+            linhas = planilha.ler(caminho)
+            if hasattr(self.ativa, "preencher_planilha"):
+                planilha.verificar_gravacao(caminho)
+        except planilha.ErroPlanilha as erro:
+            self.tela.imprimir(("  × %s" % erro, RUIM))
+            self.tela.imprimir()
+            return False
+        itens = []
+        for numero in sorted(linhas):
+            valor = linhas[numero].get("A", "")
+            if numero == 1 and valor and not re.search(r"\d", valor):
+                continue
+            if valor:
+                itens.append((numero, valor))
+        if not itens:
+            self.tela.imprimir(("  × Nenhum part number na coluna A da planilha.", RUIM))
+            self.tela.imprimir()
+            return False
+        self.planilha = (caminho, itens, linhas.get(1, {}))
+        self.itens = [pn for _, pn in itens]
+        return True
 
     def adicionar_itens(self, texto, primeira_coluna=False):
         """Separa por espaço, vírgula, ponto e vírgula ou quebra de linha. Com
@@ -262,6 +293,12 @@ class App:
             self.tela.imprimir()
         elif comando.macro:
             self.ativa = comando.macro
+            if len(partes) > 1 and planilha.eh_planilha(partes[1]):
+                if self.carregar_planilha(partes[1]):
+                    self.executar_macro()
+                else:
+                    self.voltar_ao_comando()
+                return
             if len(partes) > 1:
                 self.adicionar_itens(partes[1])
             if self.itens:
@@ -379,7 +416,9 @@ class App:
         total, feitos, falhas = len(itens), 0, []
         cancelado, erro_geral = False, None
 
-        self.tela.imprimir(("  " + macro.TITULO, TITULO), (" · %d %s" % (total, macro.ROTULO), FRACO))
+        da_planilha = self.planilha
+        origem = " · " + os.path.basename(da_planilha[0]) if da_planilha else ""
+        self.tela.imprimir(("  " + macro.TITULO, TITULO), (" · %d %s%s" % (total, macro.ROTULO, origem), FRACO))
         self.mostrar_andamento("Conectando ao SAP...")
         # inicio() pode devolver outra sessão (uma janela nova) para os itens rodarem nela;
         # fim() roda sempre que inicio() deu certo, mesmo com falha ou cancelamento.
@@ -449,8 +488,16 @@ class App:
 
         if aviso_do_fim:
             self.tela.imprimir(("  × Ao finalizar: " + aviso_do_fim, RUIM))
+        # Lista vinda de um .xlsx: preencher_planilha() grava os resultados no arquivo.
+        if preparada and resultados and da_planilha and hasattr(macro, "preencher_planilha"):
+            caminho, linhas_da_planilha, cabecalho = da_planilha
+            try:
+                for linha in macro.preencher_planilha(caminho, linhas_da_planilha, cabecalho, resultados) or []:
+                    self.tela.imprimir(("  " + linha, TITULO))
+            except Exception as erro:
+                self.tela.imprimir(("  × Ao preencher a planilha: %s" % erro, RUIM))
         # concluir() recebe as linhas da lista e o que por_item devolveu para cada item.
-        if preparada and resultados and hasattr(macro, "concluir"):
+        elif preparada and resultados and hasattr(macro, "concluir"):
             try:
                 for linha in macro.concluir(linhas, resultados) or []:
                     self.tela.imprimir(("  " + linha, TITULO))
@@ -490,7 +537,7 @@ class App:
 
         sugestoes = self.sugestoes()
         if na_lista:
-            dica = "  Cole ou digite os %s e tecle Enter · Esc cancela" % self.ativa.ROTULO
+            dica = "  Cole ou digite os %s (ou o caminho de um .xlsx) e tecle Enter · Esc cancela" % self.ativa.ROTULO
             if self.itens:
                 dica = "  Enter com a linha vazia executa · Esc cancela"
             linhas.append([(dica, FRACO)])
