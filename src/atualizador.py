@@ -44,8 +44,17 @@ def _baixar(url):
         raise ErroAtualizacao("sem acesso ao GitHub (%s); a rede da empresa pode estar bloqueando" % getattr(erro, "reason", erro))
 
 
-def _numeros(versao):
-    return tuple(int(numero) for numero in re.findall(r"\d+", versao))
+def _ordem(versao):
+    """Chave para comparar versões: 0.10.3-alpha vem antes de 0.10.3, que vem antes
+    de 0.10.4; entre prévias da mesma versão, alpha < beta e alpha.1 < alpha.2."""
+    encontrada = re.match(r"v?(\d+(?:\.\d+)*)(?:-(.+))?$", versao.strip())
+    if not encontrada:
+        return ((), 0, ())
+    numeros = tuple(int(numero) for numero in encontrada.group(1).split("."))
+    if not encontrada.group(2):
+        return (numeros, 1, ())
+    partes = tuple((0, int(parte), "") if parte.isdigit() else (1, 0, parte) for parte in encontrada.group(2).split("."))
+    return (numeros, 0, partes)
 
 
 def versao_do_codigo(texto):
@@ -61,7 +70,7 @@ def versao_publicada():
 
 
 def mais_nova(publicada, local):
-    return _numeros(publicada) > _numeros(local)
+    return _ordem(publicada) > _ordem(local)
 
 
 def instalar(raiz, versao_local):
