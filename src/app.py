@@ -429,22 +429,25 @@ class App:
         except Exception as erro:
             erro_geral = str(erro)
 
+        # Os itens ficam numa coluna de largura fixa, para o resultado sair alinhado.
+        largura_do_item = max([len(item) for item in itens] or [0])
+
         def registrar(item, retorno):
             nonlocal feitos
             resultados[item] = retorno
             feitos += 1
             texto = str(retorno) if retorno is not None else getattr(macro, "SUCESSO", "ok")
-            self.tela.imprimir(("  √ ", BOM), item, ("  " + texto, FRACO))
+            self.tela.imprimir(("  √ ", BOM), item.ljust(largura_do_item), ("  " + texto, FRACO))
 
         def falhar(item, erro):
             falhas.append(item)
-            self.tela.imprimir(("  × ", RUIM), item, ("  %s" % erro, RUIM))
+            self.tela.imprimir(("  × ", RUIM), item.ljust(largura_do_item), ("  %s" % erro, RUIM))
 
         # por_lote() trata todos os itens de uma vez e devolve {item: resultado ou exceção}.
         # Se ele não conseguir, a macro segue item a item com por_item().
         pendentes = list(itens)
         if preparada and itens and hasattr(macro, "por_lote"):
-            self.mostrar_andamento("Consultando %d %s de uma vez..." % (total, macro.ROTULO), cancelavel=False)
+            self.mostrar_andamento("Consultando %d %s..." % (total, macro.ROTULO), cancelavel=False)
             try:
                 lote = macro.por_lote(sessao, list(itens))
             except Exception as erro:
