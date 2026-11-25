@@ -30,7 +30,13 @@ def git(*argumentos):
 
 
 def versao(tag):
-    return tuple(int(numero) for numero in re.findall(r"\d+", tag))
+    """Chave para ordenar tags: v0.10.3-alpha vem antes de v0.10.3, que vem antes de v0.10.4."""
+    encontrada = re.match(r"v?(\d+(?:\.\d+)*)(?:-(.+))?$", tag)
+    if not encontrada:
+        return ((), 0, "")
+    numeros = tuple(int(numero) for numero in encontrada.group(1).split("."))
+    previa = encontrada.group(2)
+    return (numeros, 0, previa) if previa else (numeros, 1, "")
 
 
 def tag_anterior(tag):

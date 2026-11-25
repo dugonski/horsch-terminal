@@ -36,6 +36,9 @@ jobs:
         shell: bash
         run: |
           python .github/changelog.py "$GITHUB_REF_NAME" notas.md
-          gh release create "$GITHUB_REF_NAME" dist/horsch-terminal.zip --title "$GITHUB_REF_NAME" --notes-file notas.md
+          # Tags com sufixo (v0.10.3-alpha, v1.0.0-beta.1...) saem como pré-lançamento.
+          previa=""
+          case "$GITHUB_REF_NAME" in *-*) previa="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/horsch-terminal.zip --title "$GITHUB_REF_NAME" --notes-file notas.md $previa
         env:
           GH_TOKEN: ${{ github.token }}
