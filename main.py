@@ -9,7 +9,7 @@ import sys
 from src import sap
 from src.app import App
 
-VERSAO = "0.10.3-alpha"
+VERSAO = "0.11.0-alpha"
 
 
 def main():

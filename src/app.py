@@ -7,7 +7,7 @@ import re
 import struct
 import time
 
-from . import atualizador, credenciais, historico, logo, planilha, preferencias, sap
+from . import atualizador, credenciais, historico, jira, logo, planilha, preferencias, sap
 from .tela import BOM, DESTAQUE, FRACO, RUIM, TITULO, Teclado, Tela
 
 
@@ -39,6 +39,7 @@ class App:
         self.comandos = [Comando(m.COMANDO, m.DESCRICAO, m) for m in carregar_macros(os.path.join(raiz, "macros"))]
         self.comandos += [
             Comando("login", "Abre o SAP e faz login com as credenciais salvas"),
+            Comando("jira", "Cria itens no Jira a partir de uma planilha .xlsx"),
             Comando("customizar", "Muda o estilo da logo: /customizar fill ou /customizar hollow"),
             Comando("atualizar", "Baixa e instala a versão mais nova do app"),
             Comando("ajuda", "Mostra os comandos disponíveis"),
@@ -308,6 +309,8 @@ class App:
             self.tela.imprimir()
         elif nome == "login":
             self.fazer_login()
+        elif nome == "jira":
+            self.criar_no_jira(partes[1] if len(partes) > 1 else "")
         elif nome == "customizar":
             self.customizar(partes[1].strip().lower() if len(partes) > 1 else "")
         elif nome == "atualizar":
@@ -365,15 +368,66 @@ class App:
             self.tela.imprimir(("  baixe o zip completo do GitHub para atualizá-lo.", FRACO))
         self.tela.imprimir()
 
+    def erro_de_credencial(self, erro):
+        problema, _, como_resolver = str(erro).partition("\n")
+        self.tela.imprimir(("  × " + problema, RUIM))
+        for linha in como_resolver.splitlines():
+            self.tela.imprimir(("  " + linha, FRACO))
+        self.tela.imprimir()
+
+    def criar_no_jira(self, argumentos):
+        """/jira planilha.xlsx cria os itens; /jira --testar planilha.xlsx só confere."""
+        testar = bool(re.search(r"(^|\s)--?testar(\s|$)", argumentos))
+        caminho = planilha.eh_planilha(re.sub(r"(^|\s)--?testar(\s|$)", " ", argumentos))
+        if not caminho:
+            self.tela.imprimir(("  Uso: ", FRACO), "/jira caminho\\da\\planilha.xlsx",
+                               ("   ·   para só conferir, sem criar: ", FRACO), "/jira --testar caminho.xlsx")
+            self.tela.imprimir()
+            return
+        try:
+            dados = credenciais.ler_jira()
+        except credenciais.ErroCredenciais as erro:
+            self.erro_de_credencial(erro)
+            return
+
+        modo = " · teste, nada será criado" if testar else ""
+        self.tela.imprimir(("  Jira", TITULO), (" · %s%s" % (os.path.basename(caminho), modo), FRACO))
+
+        def mostrar(linha, ok, texto):
+            rotulo = ("linha %d" % linha).ljust(9)
+            if ok:
+                self.tela.imprimir(("  √ ", BOM), rotulo, ("  " + texto, FRACO))
+            else:
+                self.tela.imprimir(("  × ", RUIM), rotulo, ("  " + texto, RUIM))
+
+        self.mostrar_andamento("Conectando ao Jira...", cancelavel=False)
+        try:
+            if not testar:
+                planilha.verificar_gravacao(caminho)
+            cliente = jira.Cliente(dados["url"], dados["token"])
+            cliente.eu()  # confere endereço e token antes de começar
+            criados, com_erro, pulados = jira.executar(
+                cliente, caminho, testar, mostrar, self.mostrar_andamento, self.pediu_cancelamento)
+        except (jira.ErroJira, planilha.ErroPlanilha) as erro:
+            self.tela.imprimir(("  × %s" % erro, RUIM))
+            self.tela.imprimir()
+            return
+
+        if testar:
+            texto = "  Teste concluído · %d prontas para criar" % criados + (" · %d com erro" % com_erro if com_erro else "")
+            self.tela.imprimir((texto, TITULO if com_erro else BOM))
+        else:
+            texto = "  Concluído · %d criados" % criados + (" · %d com erro" % com_erro if com_erro else "")
+            self.tela.imprimir((texto, BOM if not com_erro else TITULO))
+        if pulados:
+            self.tela.imprimir(("  %d linhas já tinham chave e foram puladas." % pulados, FRACO))
+        self.tela.imprimir()
+
     def fazer_login(self):
         try:
             dados = credenciais.ler()
         except credenciais.ErroCredenciais as erro:
-            problema, _, como_resolver = str(erro).partition("\n")
-            self.tela.imprimir(("  × " + problema, RUIM))
-            for linha in como_resolver.splitlines():
-                self.tela.imprimir(("  " + linha, FRACO))
-            self.tela.imprimir()
+            self.erro_de_credencial(erro)
             return
 
         def avisar(texto):
