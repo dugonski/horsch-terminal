@@ -15,6 +15,7 @@ basta ter o Python 3.8 ou mais novo.
 |----------------|------------------------------------------------------------------|
 | `/pdfs`        | Abre no navegador o PDF de cada part number (MD04, centro 8500)  |
 | `/precos`      | Preço do pedido de compra mais recente de cada part number (ME2M, centro 8500) |
+| `/jira`        | Cria itens no Jira a partir de uma planilha `.xlsx`              |
 | `/login`       | Abre o SAP e faz login com as credenciais salvas                 |
 | `/customizar`  | Muda o estilo da logo: `/customizar fill` ou `/customizar hollow` |
 | `/atualizar`   | Baixa e instala a versão mais nova do app                        |
@@ -101,6 +102,61 @@ Formato esperado, na primeira aba:
 
 O `/pdfs` também aceita uma planilha, lendo os part numbers da coluna A.
 
+## Jira (`/jira`)
+
+Cria um item no Jira para cada linha de uma planilha, pela API do Jira, com as
+mesmas permissões que você tem na tela.
+
+### Token
+
+No Jira, abra o seu perfil > **Personal Access Tokens** > **Create token**, copie o
+token e crie à mão o arquivo `.horsch-terminal\jira.ini` na sua pasta de usuário:
+
+```ini
+[jira]
+url = https://jira.horsch.com
+token = SEU_TOKEN_PESSOAL
+```
+
+O token vale como a sua senha para o Jira: não compartilhe nem coloque em pastas
+de rede. Se ele expirar, gere outro e troque no arquivo.
+
+### Uso
+
+    /jira --testar C:\Users\voce\Documents\itens.xlsx
+    /jira C:\Users\voce\Documents\itens.xlsx
+
+`--testar` confere a planilha inteira (campos obrigatórios, opções, tipos, vínculos
+e anexos) sem criar nada. Sem ele, os itens são criados.
+
+### Planilha
+
+A linha 1 é o cabeçalho, com os nomes dos campos como aparecem no formulário do
+Jira; cada linha abaixo é um item. Exemplo:
+
+| Projeto | Tipo   | Resumo   | Grupo           | Componentes | Prioridade | Data final | Itens vinculados  | Anexos            |
+|---------|--------|----------|-----------------|-------------|------------|------------|-------------------|-------------------|
+| BRASRD  | Tarefa | Chicote… | BRA Electronics | Prototyping | Alta       | 15.12.2026 | blocks BRASRD-123 | C:\…\desenho.pdf |
+
+- **Projeto** (a sigla, ex.: `BRASRD`) e **Tipo** são obrigatórios em toda linha,
+  além dos campos que o Jira exige (como Resumo e Grupo).
+- Os nomes não precisam ser idênticos: acentos, maiúsculas, plural e "(s)" não
+  importam (`Componentes` casa com `Componente(s)`). Também vale o código do
+  campo, como `customfield_14510`.
+- Vários valores na mesma célula: separe com `;` (ex.: `BRA Electronics; BRA Prototyping`).
+- Datas em `dd.mm.aaaa` ou como data do Excel. Responsável: o usuário do Jira, ou
+  `Automático`.
+- **Itens vinculados**: o texto da lista do Jira e a chave, ex.: `blocks BRASRD-123`,
+  `is caused by BRASRD-45`, `linked to BRASRD-7`.
+- **Anexos**: caminhos de arquivos no computador.
+- Campos que o app não sabe converter podem receber o valor no formato da API do
+  Jira (JSON), ex.: `[{"key": "PDM-1"}]`.
+
+No fim, o app escreve na própria planilha as colunas **Chave** (ex.: `BRASRD-1234`)
+e **Status** (`criado` ou o erro). Rodar de novo é seguro: linhas que já têm chave
+são puladas, e só as que deram erro são tentadas outra vez. Feche a planilha no
+Excel antes de rodar.
+
 ## Login automático
 
 O comando `/login` abre o SAP Logon (se estiver fechado), abre a conexão e entra
@@ -167,6 +223,7 @@ salva em `.horsch-terminal\preferencias.ini`, na sua pasta de usuário.
 - `src/atualizador.py`: comando `/atualizar`.
 - `src/area_de_transferencia.py`: copiar texto para o Ctrl+V.
 - `src/planilha.py`: leitura e preenchimento de `.xlsx`, sem bibliotecas externas.
+- `src/jira.py`: comando `/jira` (API do Jira e leitura da planilha de itens).
 - `src/tela.py`: desenho da tela e leitura do teclado.
 - `src/app.py`: comandos, lista de itens e execução.
 - `macros/`: uma macro por arquivo.
